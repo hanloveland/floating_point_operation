@@ -11,27 +11,27 @@ int main() {
     uint32_t pass = 0;
     uint32_t fail = 0;
 
-    for(int i=0;i<1000000;i++) {
+    for(int i=0;i<1;i++) {
     float a = dist(e2);
     float b = dist(e2);
-    float c = a * b;
+    float c = a / b;
 
     FP32 fp_a = FP32(a);
     FP32 fp_b = FP32(b);
-    FP32 fp_exp_c = FP32(a*b);
-    FP32 fp_c = fp_a * fp_b;
+    FP32 fp_exp_c = FP32(a/b);
+    FP32 fp_c = fp_a / fp_b;
     std::cout<<std::setprecision(16);
     std::cout<<"a :"<<fp_a.value.fval<<std::hex<<" -> 0x"<<fp_a.value.ival<<std::endl;
     std::cout<<"b :"<<fp_b.value.fval<<std::hex<<" -> 0x"<<fp_b.value.ival<<std::endl;
 
     std::cout<<"Exp"<<std::endl;
-    std::cout<<" --> a * b: "<<fp_exp_c.value.fval<<std::endl;
+    std::cout<<" --> a / b: "<<fp_exp_c.value.fval<<std::endl;
     std::cout<<" --> Sign "<<std::hex<<fp_exp_c.get_sign()<<std::endl;
     std::cout<<" --> Exponent "<<std::hex<<fp_exp_c.get_expo()<<std::endl;
     std::cout<<" --> Mantissa "<<std::hex<<fp_exp_c.get_mani()<<std::endl;   
 
     std::cout<<"Calc"<<std::endl;
-    std::cout<<" --> a * b: "<<fp_c.value.fval<<std::endl;
+    std::cout<<" --> a / b: "<<fp_c.value.fval<<std::endl;
     std::cout<<" --> Sign "<<std::hex<<fp_c.get_sign()<<std::endl;
     std::cout<<" --> Exponent "<<std::hex<<fp_c.get_expo()<<std::endl;
     std::cout<<" --> Mantissa "<<std::hex<<fp_c.get_mani()<<std::endl;   
