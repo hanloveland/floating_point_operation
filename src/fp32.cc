@@ -1,7 +1,7 @@
 #include "fp32.h"
 #include <iostream>
 
-
+// #define PRINT_DEBUG 1
 #define K_WIDTH 32
 #define E_WIDTH 8
 #define M_WIDTH 23
@@ -35,11 +35,9 @@ FP32 FP32::operator+(const FP32& other) const {
     } else if(is_subnor() || other.is_subnor()) { // Normal Operation 
         //TBD (maybe..not support)
         std::cout<<"return surbnormal (TBD)"<<std::endl;  
+        return FP32(uint32_t(pzero));     
     } else { // Normal Operation
         std::cout<<"Normal Addition"<<std::endl;        
-        std::cout<<" Sign :"<<std::hex<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
-        std::cout<<" Expo :"<<std::hex<<get_expo()<<" / Expo :"<<other.get_expo()<<std::endl;
-        std::cout<<" Mantissa :"<<std::hex<<get_emani()<<" / Mantissa :"<<other.get_emani()<<std::endl;
 
         uint32_t is_large_a = get_expo() >= other.get_expo() ? 1 : 0;   // Compare Exponent for Input A and Input B
         uint32_t pre_diff  = (is_large_a == 1) ? (get_expo() - other.get_expo()) :
@@ -55,29 +53,21 @@ FP32 FP32::operator+(const FP32& other) const {
         uint64_t pre_m_b = (is_large_a == 1) ? (uint64_t)other.get_emani() :
                                                (uint64_t)other.get_emani() << pre_diff;                                            
 
-        std::cout<<" Pre M for A :"<<std::hex<<pre_m_a<<std::endl;
-        std::cout<<" Pre M for B :"<<std::hex<<pre_m_b<<std::endl;
         //Calcuation (the difference exponents for Input A and B is less then ..24???)
         uint64_t post_m;
         uint32_t post_s;
         if(get_sign() == other.get_sign()) {
-            // pre_m_a + pre_m_b
             post_m = pre_m_a + pre_m_b; 
             post_s = get_sign();
         } else {
             if(pre_m_a >= pre_m_b) {
-            // pre_m_a - pre_m_b
                 post_m = pre_m_a - pre_m_b;
                 post_s = get_sign();
             } else {
-            // pre_m_b - pre_m_a
                 post_m = pre_m_b - pre_m_a;
                 post_s = other.get_sign();
             }
-        }
-        std::cout<<" Post S  "<<post_s<<std::endl;
-        std::cout<<" Post E :"<<std::hex<<post_e<<std::endl;
-        std::cout<<" Post M :"<<std::hex<<post_m<<std::endl;            
+        }         
         // Normalize and return Result
         uint32_t nor_s,nor_e,nor_m;
         nor_s = post_s;
@@ -86,7 +76,7 @@ FP32 FP32::operator+(const FP32& other) const {
         for(uint32_t pos=0;pos<63;pos++) {
             if((post_m >> pos & 0x1) == 1) msb_one_pos = pos;
         }
-        std::cout<<" msb_one_pos  "<<msb_one_pos<<std::endl;
+
         if(msb_one_pos >= 23) {
             u_int32_t shift_pos = msb_one_pos - 23;
             nor_e = post_e + shift_pos;
@@ -109,10 +99,25 @@ FP32 FP32::operator+(const FP32& other) const {
                 else           return FP32(uint32_t(nzero));                
             }
         }
+        uint32_t final_r = nor_s << (E_WIDTH + M_WIDTH) | nor_e << M_WIDTH | nor_m;
+        
+        #ifdef PRINT_DEBUG
+        std::cout<<"Normal Addition"<<std::endl;        
+        std::cout<<" Operand A Sign :"<<std::hex<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
+        std::cout<<" Expo :"<<std::hex<<get_expo()<<" / Expo :"<<other.get_expo()<<std::endl;
+        std::cout<<" Mantissa :"<<std::hex<<get_emani()<<" / Mantissa :"<<other.get_emani()<<std::endl;
+
+        std::cout<<" Pre M for A :"<<std::hex<<pre_m_a<<std::endl;
+        std::cout<<" Pre M for B :"<<std::hex<<pre_m_b<<std::endl;
+
+        std::cout<<" Post S  "<<post_s<<std::endl;
+        std::cout<<" Post E :"<<std::hex<<post_e<<std::endl;
+        std::cout<<" Post M :"<<std::hex<<post_m<<std::endl;   
+
         std::cout<<" Normalized S  "<<nor_s<<std::endl;
         std::cout<<" Normalized E :"<<std::hex<<nor_e<<std::endl;
         std::cout<<" Normalized M :"<<std::hex<<nor_m<<std::endl;                    
-        uint32_t final_r = nor_s << (E_WIDTH + M_WIDTH) | nor_e << M_WIDTH | nor_m;
+        #endif                       
         return FP32(final_r);   
     }
 }
@@ -141,11 +146,10 @@ FP32 FP32::operator*(const FP32& other) const {
     } else if(is_subnor() || other.is_subnor()) {
         std::cout<<"return surbnormal (TBD)"<<std::endl;  
         //TBD
+        if(get_sign() != other.get_sign()) return FP32(uint32_t(nzero));
+        else                               return FP32(uint32_t(pzero));        
     } else {
         std::cout<<"Normal Multiplication"<<std::endl;        
-        std::cout<<" Sign :"<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
-        std::cout<<" Expo :"<<std::hex<<get_expo()<<" / Expo :"<<other.get_expo()<<std::endl;
-        std::cout<<" Mantissa :"<<std::hex<<get_emani()<<" / Mantissa :"<<other.get_emani()<<std::endl;
         uint32_t pre_r_s = get_sign() * other.get_sign();   // Sign 
         uint32_t pre_r_e = get_expo() + other.get_expo();   // Exponent (Shifted by the bias, Need to compensate in normalization stage)
         uint64_t pre_r_m = (uint64_t)get_emani() * (uint64_t)other.get_emani(); // Multiply Mantissas
@@ -155,16 +159,11 @@ FP32 FP32::operator*(const FP32& other) const {
 
         //Normalization 
         norm_r_s = pre_r_s;
-        std::cout<<" pre_r_m :"<<std::hex<<pre_r_m<<std::endl;
         if(pre_r_m >> (M_WIDTH + M_WIDTH + 1) == 1) {
             norm_r_e = pre_r_e + 1;
-            //pre_r_m >> (M_WIDTH+1-3)
             norm_grs = (pre_r_m >> (M_WIDTH+1-3-20)) & 0xFFFFFF;
             norm_round_up_bits = get_round_bits(norm_grs);
             norm_r_m = (((pre_r_m >> (M_WIDTH+1)) & M_MASK) + norm_round_up_bits);
-            std::cout<<" EXP +1 "<<std::endl;
-            std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-            std::cout<<" norm_r_m :"<<std::hex<<norm_r_m<<std::endl;            
             // Round-up Using RoundTiesToEven
         }
         else {
@@ -172,9 +171,6 @@ FP32 FP32::operator*(const FP32& other) const {
             norm_grs = (pre_r_m >> (M_WIDTH-3-20)) & 0xFFFFFF;
             norm_round_up_bits = get_round_bits(norm_grs);
             norm_r_m = (((pre_r_m >> (M_WIDTH)) & M_MASK) + norm_round_up_bits);
-            std::cout<<" EXP  "<<std::endl;
-            std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-            std::cout<<" norm_r_m :"<<std::hex<<norm_r_m<<std::endl;               
         }
         
         if(norm_r_e >= (E_MAX + E_BIAS)) { //Overflow
@@ -190,6 +186,20 @@ FP32 FP32::operator*(const FP32& other) const {
         } else { // Normal Number Operation
             uint32_t norm_r_e_com = norm_r_e - E_BIAS;
             uint32_t final_r = norm_r_s << (E_WIDTH + M_WIDTH) | norm_r_e_com << M_WIDTH | norm_r_m;
+            #ifdef PRINT_DEBUG
+                std::cout<<"Normal Multiplication"<<std::endl;        
+                std::cout<<" Sign :"<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
+                std::cout<<" Expo: "<<std::hex<<get_expo()<<" / Expo: "<<other.get_expo()<<std::endl;
+                std::cout<<" Mantissa: "<<std::hex<<get_emani()<<" / Mantissa: "<<other.get_emani()<<std::endl;
+
+                std::cout<<" Pre S:"<<std::hex<<pre_r_s<<std::endl;
+                std::cout<<" Pre E:"<<std::hex<<pre_r_e<<std::endl;
+                std::cout<<" Pre M:"<<std::hex<<pre_r_m<<std::endl;
+
+                std::cout<<" Post & Normalized S:"<<std::hex<<norm_r_s<<std::endl;
+                std::cout<<" Post & Normalized E:"<<std::hex<<norm_r_e_com<<std::endl;
+                std::cout<<" Post & Normalized M:"<<std::hex<<norm_r_m<<std::endl;                
+            #endif              
             return FP32(final_r);
         }   
     }
@@ -216,95 +226,55 @@ FP32 FP32::operator/(const FP32& other) const {
         if(get_sign() != other.get_sign()) return FP32(uint32_t(nInf));
         else                               return FP32(uint32_t(pInf));        
     } else if(is_subnor() || other.is_subnor()) {
-        std::cout<<"return surbnormal (TBD)"<<std::endl;  
         //TBD
+        std::cout<<"return surbnormal (TBD)"<<std::endl;  
+        if(get_sign() != other.get_sign()) return FP32(uint32_t(nzero));
+        else                               return FP32(uint32_t(pzero));         
     } else {
         std::cout<<"Normal Division"<<std::endl;        
-        std::cout<<" Sign :"<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
-        std::cout<<" Expo :"<<std::hex<<get_expo()<<" / Expo :"<<other.get_expo()<<std::endl;
-        std::cout<<" Mantissa :"<<std::hex<<get_emani()<<" / Mantissa :"<<other.get_emani()<<std::endl;
         uint32_t pre_s,pre_e;
         uint64_t pre_m;
         if(get_sign() != other.get_sign()) pre_s = 1;
         else                               pre_s = 0;
 
+        uint64_t sh_manti = 16; 
         pre_e = (E_BIAS + get_expo()) - other.get_expo();
-        pre_m = ((uint64_t)(get_emani())<<(M_WIDTH+1))/(uint64_t)(other.get_emani()); 
+        pre_m = ((uint64_t)(get_emani())<<(M_WIDTH+1+sh_manti))/(uint64_t)(other.get_emani()); 
 
-
-        std::cout<<" Pre S:"<<std::hex<<pre_s<<std::endl;
-        std::cout<<" Pre E:"<<std::hex<<pre_e<<std::endl;
-        std::cout<<" Pre M:"<<std::hex<<pre_m<<std::endl;
         uint32_t nor_s,nor_e,nor_m;//
         nor_s = pre_s;
 
-        //  = get_sign() * other.get_sign();   // Sign 
-        // uint32_t pre_r_e = get_expo() + other.get_expo();   // Exponent (Shifted by the bias, Need to compensate in normalization stage)
-        // uint64_t pre_r_m = (uint64_t)get_emani() * (uint64_t)other.get_emani(); // Multiply Mantissas
-        // uint32_t norm_r_s,norm_r_e,norm_r_m;
         uint32_t norm_grs;
         uint32_t norm_round_up_bits;
-        if(pre_m >> (M_WIDTH + M_WIDTH + 1) == 1) {
-            nor_e = pre_e + 1;
-            //pre_r_m >> (M_WIDTH+1-3)
-            // norm_grs = (pre_r_m >> (M_WIDTH+1-3-20)) & 0xFFFFFF;
-            norm_round_up_bits = 0;//get_round_bits(norm_grs);
-            nor_m = (((pre_m >> (M_WIDTH+1)) & M_MASK) + norm_round_up_bits);
-            std::cout<<" EXP +1 "<<std::endl;
-            std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-            std::cout<<" norm_r_m :"<<std::hex<<nor_m<<std::endl;            
+        if(pre_m >> (M_WIDTH + 1 + sh_manti) == 1) {
+            nor_e = pre_e;
+            norm_grs = (pre_m << (M_WIDTH+1-sh_manti-2)) & 0xFFFFFF;
+            norm_round_up_bits = get_round_bits(norm_grs);
+            nor_m = (((pre_m >> (1+sh_manti)) & M_MASK) + norm_round_up_bits);       
             // Round-up Using RoundTiesToEven
         }
         else {
-            nor_e = pre_e;
-            // norm_grs = (pre_r_m >> (M_WIDTH-3-20)) & 0xFFFFFF;
-            norm_round_up_bits = 0;//get_round_bits(norm_grs);
-            nor_m = (((pre_m >> (M_WIDTH)) & M_MASK) + norm_round_up_bits);
-            std::cout<<" EXP  "<<std::endl;
-            std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-            std::cout<<" norm_r_m :"<<std::hex<<nor_m<<std::endl;               
+            nor_e = pre_e - 1;
+            norm_grs = (pre_m << (M_WIDTH+1-sh_manti-1)) & 0xFFFFFF;
+            norm_round_up_bits = get_round_bits(norm_grs);
+            nor_m = (((pre_m >> sh_manti) & M_MASK) + norm_round_up_bits);             
         }
             uint32_t final_r = nor_s << (E_WIDTH + M_WIDTH) | nor_e << M_WIDTH | nor_m;
+            #ifdef PRINT_DEBUG
+                std::cout<<"Normal Division"<<std::endl;        
+                std::cout<<" Sign :"<<get_sign()<<" / Sign :"<<other.get_sign()<<std::endl;
+                std::cout<<" Expo: "<<std::hex<<get_expo()<<" / Expo: "<<other.get_expo()<<std::endl;
+                std::cout<<" Mantissa: "<<std::hex<<get_emani()<<" / Mantissa: "<<other.get_emani()<<std::endl;
+
+                std::cout<<" Pre S:"<<std::hex<<pre_s<<std::endl;
+                std::cout<<" Pre E:"<<std::hex<<pre_e<<std::endl;
+                std::cout<<" Pre M:"<<std::hex<<pre_m<<std::endl;
+
+                std::cout<<" Post & Normalized S:"<<std::hex<<nor_s<<std::endl;
+                std::cout<<" Post & Normalized E:"<<std::hex<<nor_e<<std::endl;
+                std::cout<<" Post & Normalized M:"<<std::hex<<nor_m<<std::endl;                
+            #endif
             return FP32(final_r);
-        // //Normalization 
-        // norm_r_s = pre_r_s;
-        // std::cout<<" pre_r_m :"<<std::hex<<pre_r_m<<std::endl;
-        // if(pre_r_m >> (M_WIDTH + M_WIDTH + 1) == 1) {
-        //     norm_r_e = pre_r_e + 1;
-        //     //pre_r_m >> (M_WIDTH+1-3)
-        //     norm_grs = (pre_r_m >> (M_WIDTH+1-3-20)) & 0xFFFFFF;
-        //     norm_round_up_bits = get_round_bits(norm_grs);
-        //     norm_r_m = (((pre_r_m >> (M_WIDTH+1)) & M_MASK) + norm_round_up_bits);
-        //     std::cout<<" EXP +1 "<<std::endl;
-        //     std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-        //     std::cout<<" norm_r_m :"<<std::hex<<norm_r_m<<std::endl;            
-        //     // Round-up Using RoundTiesToEven
-        // }
-        // else {
-        //     norm_r_e = pre_r_e;
-        //     norm_grs = (pre_r_m >> (M_WIDTH-3-20)) & 0xFFFFFF;
-        //     norm_round_up_bits = get_round_bits(norm_grs);
-        //     norm_r_m = (((pre_r_m >> (M_WIDTH)) & M_MASK) + norm_round_up_bits);
-        //     std::cout<<" EXP  "<<std::endl;
-        //     std::cout<<" norm_grs :"<<std::hex<<norm_grs<<std::endl;
-        //     std::cout<<" norm_r_m :"<<std::hex<<norm_r_m<<std::endl;               
-        // }
-        
-        // if(norm_r_e >= (E_MAX + E_BIAS)) { //Overflow
-        //     if(norm_r_s == 0x1) return FP32(uint32_t(nInf));
-        //     else                return FP32(uint32_t(pInf));
-        // } else if(norm_r_e == E_BIAS) { // Subnormal (maybe not support?)
-        //    // TBD (return zero)
-        //     if(norm_r_s == 0x1) return FP32(uint32_t(nzero));
-        //     else                return FP32(uint32_t(pzero));             
-        // } else if(norm_r_e < E_BIAS) { //Underflow 
-        //     if(norm_r_s == 0x1) return FP32(uint32_t(nzero));
-        //     else return                FP32(uint32_t(pzero));
-        // } else { // Normal Number Operation
-        //     uint32_t norm_r_e_com = norm_r_e - E_BIAS;
-        //     uint32_t final_r = norm_r_s << (E_WIDTH + M_WIDTH) | norm_r_e_com << M_WIDTH | norm_r_m;
-        //     return FP32(final_r);
-        // }   
     }
 }
 

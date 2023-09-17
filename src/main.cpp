@@ -8,43 +8,54 @@ int main() {
     std::mt19937 e2(rd());
     std::uniform_real_distribution<> dist(0, 10);
 
-    uint32_t pass = 0;
-    uint32_t fail = 0;
-
-    for(int i=0;i<1;i++) {
+    uint32_t pass[4] = {0,0,0,0};
+    uint32_t fail[4] = {0,0,0,0};
+    for(int op=0;op<4;op++) {
+    for(int i=0;i<100000;i++) {
     float a = dist(e2);
     float b = dist(e2);
-    float c = a / b;
 
     FP32 fp_a = FP32(a);
     FP32 fp_b = FP32(b);
-    FP32 fp_exp_c = FP32(a/b);
-    FP32 fp_c = fp_a / fp_b;
-    std::cout<<std::setprecision(16);
-    std::cout<<"a :"<<fp_a.value.fval<<std::hex<<" -> 0x"<<fp_a.value.ival<<std::endl;
-    std::cout<<"b :"<<fp_b.value.fval<<std::hex<<" -> 0x"<<fp_b.value.ival<<std::endl;
+    FP32 fp_exp_c = FP32(float(0.0));
+    if(op == 0)       fp_exp_c = FP32(a+b);
+    else if (op == 1) fp_exp_c = FP32(a-b);
+    else if (op == 2) fp_exp_c = FP32(a*b);
+    else if (op == 3) fp_exp_c = FP32(a/b);
+    FP32 fp_c = FP32(float(0.0));
+    if(op == 0)       fp_c = fp_a + fp_b;
+    else if (op == 1) fp_c = fp_a - fp_b;
+    else if (op == 2) fp_c = fp_a * fp_b;
+    else if (op == 3) fp_c = fp_a / fp_b;    
 
-    std::cout<<"Exp"<<std::endl;
-    std::cout<<" --> a / b: "<<fp_exp_c.value.fval<<std::endl;
-    std::cout<<" --> Sign "<<std::hex<<fp_exp_c.get_sign()<<std::endl;
-    std::cout<<" --> Exponent "<<std::hex<<fp_exp_c.get_expo()<<std::endl;
-    std::cout<<" --> Mantissa "<<std::hex<<fp_exp_c.get_mani()<<std::endl;   
+   std::cout<<std::setprecision(16);
+   std::cout<<"a :"<<fp_a.value.fval<<std::hex<<" -> 0x"<<fp_a.value.ival<<std::endl;
+   std::cout<<"b :"<<fp_b.value.fval<<std::hex<<" -> 0x"<<fp_b.value.ival<<std::endl;
 
-    std::cout<<"Calc"<<std::endl;
-    std::cout<<" --> a / b: "<<fp_c.value.fval<<std::endl;
-    std::cout<<" --> Sign "<<std::hex<<fp_c.get_sign()<<std::endl;
-    std::cout<<" --> Exponent "<<std::hex<<fp_c.get_expo()<<std::endl;
-    std::cout<<" --> Mantissa "<<std::hex<<fp_c.get_mani()<<std::endl;   
+   std::cout<<"Exp"<<std::endl;
+   std::cout<<" --> a / b: "<<fp_exp_c.value.fval<<std::endl;
+   std::cout<<" --> Sign "<<std::hex<<fp_exp_c.get_sign()<<std::endl;
+   std::cout<<" --> Exponent "<<std::hex<<fp_exp_c.get_expo()<<std::endl;
+   std::cout<<" --> Mantissa "<<std::hex<<fp_exp_c.get_mani()<<std::endl;   
+
+   std::cout<<"Calc"<<std::endl;
+   std::cout<<" --> a / b: "<<fp_c.value.fval<<std::endl;
+   std::cout<<" --> Sign "<<std::hex<<fp_c.get_sign()<<std::endl;
+   std::cout<<" --> Exponent "<<std::hex<<fp_c.get_expo()<<std::endl;
+   std::cout<<" --> Mantissa "<<std::hex<<fp_c.get_mani()<<std::endl;   
 
     if(fp_exp_c.value.ival == fp_c.value.ival) {
-        pass++;
+        pass[op]++;
     } else {
-        fail++;
-        break;
+        fail[op]++;
     }
     }
+    }
+    std::cout<<"Operator[+] Pass :"<<std::dec<<pass[0]<<" / Fail :"<<fail[0]<<std::endl;
+    std::cout<<"Operator[-] Pass :"<<std::dec<<pass[1]<<" / Fail :"<<fail[1]<<std::endl;
+    std::cout<<"Operator[*] Pass :"<<std::dec<<pass[2]<<" / Fail :"<<fail[2]<<std::endl;
+    std::cout<<"Operator[/] Pass :"<<std::dec<<pass[3]<<" / Fail :"<<fail[3]<<std::endl;
 
-    std::cout<<"Pass :"<<std::dec<<pass<<" / Fail :"<<fail<<std::endl;
     //std::cout<<"Hex : 0x"<<std::hex<<a.ival<<std::endl;
     //std::cout<<" ---> S: "<<a_S<<std::dec<<"("<<a_S<<")"<<std::endl;
     //std::cout<<" ---> E: "<<a_E<<std::dec<<"("<<a_E<<")"<<std::endl;
