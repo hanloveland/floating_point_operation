@@ -2,54 +2,90 @@
 #include <iomanip> // for std::setprecision()
 #include "fp32.h"
 #include <random>
+#include "FP16G.h"
+#include "fp16.h"
 
 int main() {
     std::random_device rd;
     std::mt19937 e2(rd());
     std::uniform_real_distribution<> dist(0, 10);
 
+
+    // fp16i bb(0);
+    float fp32_a = 3.2;
+    float fp32_b = 6.7;
+    float fp32_c = fp32_a + fp32_b;
+
+    FP16g fp16g_a(fp16(0));
+    FP16g fp16g_b(fp16(0));
+    fp16g_a = fp16(fp32_a);
+    fp16g_b = fp16(fp32_b);
+    FP16g fp16g_c(fp16g_a + fp16g_b);
+    FP16 cc(float(3.4));
+
+    std::cout<<" FP32 "<<std::endl;
+    std::cout<<std::setprecision(16);
+    std::cout<<"  - A   :"<<fp32_a<<std::endl;
+    std::cout<<"  - B   :"<<fp32_b<<std::endl;
+    std::cout<<"  - A+B :"<<fp32_c<<std::endl;
+
+    std::cout<<" FP16 Golden "<<std::endl;
+    std::cout<<std::setprecision(16);
+    std::cout<<"  - A   :"<<fp16g_a.value<<std::endl;
+    std::cout<<"  - B   :"<<fp16g_b.value<<std::endl;
+    std::cout<<"  - A+B :"<<fp16g_c.value<<std::endl;    
+    // fp16 a(3.2);
+    // std::cout<<" A :"<<aa.toFloat()<<std::endl;
+    // aa.fromFloat(3.2);
+    // std::cout<<" A :"<<aa.value<<std::endl;
+    // std::cout<<" A :"<<a<<std::endl;
+    // ->fromFloat(3.2);
+    // aa.fromFloat(3.2);
+
+    return 0;
+
     uint32_t pass[4] = {0,0,0,0};
     uint32_t fail[4] = {0,0,0,0};
     for(int op=0;op<4;op++) {
-    for(int i=0;i<100000;i++) {
-    float a = dist(e2);
-    float b = dist(e2);
+        for(int i=0;i<100000;i++) {
+            float a = dist(e2);
+            float b = dist(e2);
 
-    FP32 fp_a = FP32(a);
-    FP32 fp_b = FP32(b);
-    FP32 fp_exp_c = FP32(float(0.0));
-    if(op == 0)       fp_exp_c = FP32(a+b);
-    else if (op == 1) fp_exp_c = FP32(a-b);
-    else if (op == 2) fp_exp_c = FP32(a*b);
-    else if (op == 3) fp_exp_c = FP32(a/b);
-    FP32 fp_c = FP32(float(0.0));
-    if(op == 0)       fp_c = fp_a + fp_b;
-    else if (op == 1) fp_c = fp_a - fp_b;
-    else if (op == 2) fp_c = fp_a * fp_b;
-    else if (op == 3) fp_c = fp_a / fp_b;    
+            FP32 fp_a = FP32(a);
+            FP32 fp_b = FP32(b);
+            FP32 fp_exp_c = FP32(float(0.0));
+            if(op == 0)       fp_exp_c = FP32(a+b);
+            else if (op == 1) fp_exp_c = FP32(a-b);
+            else if (op == 2) fp_exp_c = FP32(a*b);
+            else if (op == 3) fp_exp_c = FP32(a/b);
+            FP32 fp_c = FP32(float(0.0));
+            if(op == 0)       fp_c = fp_a + fp_b;
+            else if (op == 1) fp_c = fp_a - fp_b;
+            else if (op == 2) fp_c = fp_a * fp_b;
+            else if (op == 3) fp_c = fp_a / fp_b;    
 
-   std::cout<<std::setprecision(16);
-   std::cout<<"a :"<<fp_a.value.fval<<std::hex<<" -> 0x"<<fp_a.value.ival<<std::endl;
-   std::cout<<"b :"<<fp_b.value.fval<<std::hex<<" -> 0x"<<fp_b.value.ival<<std::endl;
+            std::cout<<std::setprecision(16);
+            std::cout<<"a :"<<fp_a.value.fval<<std::hex<<" -> 0x"<<fp_a.value.ival<<std::endl;
+            std::cout<<"b :"<<fp_b.value.fval<<std::hex<<" -> 0x"<<fp_b.value.ival<<std::endl;
 
-   std::cout<<"Exp"<<std::endl;
-   std::cout<<" --> a / b: "<<fp_exp_c.value.fval<<std::endl;
-   std::cout<<" --> Sign "<<std::hex<<fp_exp_c.get_sign()<<std::endl;
-   std::cout<<" --> Exponent "<<std::hex<<fp_exp_c.get_expo()<<std::endl;
-   std::cout<<" --> Mantissa "<<std::hex<<fp_exp_c.get_mani()<<std::endl;   
+            std::cout<<"Exp"<<std::endl;
+            std::cout<<" --> a / b: "<<fp_exp_c.value.fval<<std::endl;
+            std::cout<<" --> Sign "<<std::hex<<fp_exp_c.get_sign()<<std::endl;
+            std::cout<<" --> Exponent "<<std::hex<<fp_exp_c.get_expo()<<std::endl;
+            std::cout<<" --> Mantissa "<<std::hex<<fp_exp_c.get_mani()<<std::endl;   
 
-   std::cout<<"Calc"<<std::endl;
-   std::cout<<" --> a / b: "<<fp_c.value.fval<<std::endl;
-   std::cout<<" --> Sign "<<std::hex<<fp_c.get_sign()<<std::endl;
-   std::cout<<" --> Exponent "<<std::hex<<fp_c.get_expo()<<std::endl;
-   std::cout<<" --> Mantissa "<<std::hex<<fp_c.get_mani()<<std::endl;   
+            std::cout<<"Calc"<<std::endl;
+            std::cout<<" --> a / b: "<<fp_c.value.fval<<std::endl;
+            std::cout<<" --> Sign "<<std::hex<<fp_c.get_sign()<<std::endl;
+            std::cout<<" --> Exponent "<<std::hex<<fp_c.get_expo()<<std::endl;
+            std::cout<<" --> Mantissa "<<std::hex<<fp_c.get_mani()<<std::endl;   
 
-    if(fp_exp_c.value.ival == fp_c.value.ival) {
-        pass[op]++;
-    } else {
-        fail[op]++;
-    }
-    }
+            if(fp_exp_c.value.ival == fp_c.value.ival) {
+                pass[op]++;
+            } else {
+                fail[op]++;
+            }
+        }
     }
     std::cout<<"Operator[+] Pass :"<<std::dec<<pass[0]<<" / Fail :"<<fail[0]<<std::endl;
     std::cout<<"Operator[-] Pass :"<<std::dec<<pass[1]<<" / Fail :"<<fail[1]<<std::endl;
@@ -137,68 +173,6 @@ int main() {
     std::cout<<" ---> E: "<<c_E<<std::dec<<"("<<c_E<<")"<<std::endl;
     std::cout<<" ---> T: "<<c_T<<std::dec<<"("<<c_T<<")"<<std::endl; 
 
-    #endif
-    #if 0
-    bool large_a = false;
-    bool equal_ab = false;
-    if(a_E > b_E) large_a = true;
-    else if(a_E == b_E) equal_ab = true;
-    else large_a = false;
-
-    if(equal_ab) {
-        if(a_T > b_T) large_a = true;
-        else large_a = false;
-    }
-    std::cout<<" A is Large?"<<large_a<<std::endl;
-    std::cout<<" Equal ? "<<equal_ab<<std::endl;
-
-
-    uint32_t diff_exp;
-    if(large_a) diff_exp = a_E - b_E;
-    else        diff_exp = b_E - a_E;
-    std::cout<<" diff_exp ? "<<diff_exp<<std::endl;
-
-
-    uint32_t c_E; 
-    if(large_a) c_E = a_E; 
-    else        c_E = b_E;
-
-    // Significand Mul. 
-    uint64_t c_T;
-    if(large_a) c_T = (((uint64_t)(a_T|1<<fp32_t) + (uint64_t)(b_T|1<<fp32_t)>>diff_exp));
-    else        c_T = ((((uint64_t)(a_T|1<<fp32_t))>>diff_exp + (uint64_t)(b_T|1<<fp32_t)));
-    std::cout<<"a_T ? "<<a_T<<std::endl;
-    std::cout<<"(uint64_t)(a_T|1<<fp32_t) ? "<<(uint64_t)(a_T|1<<fp32_t)<<std::endl;
-    std::cout<<"(uint64_t)(a_T|1<<fp32_t)>>diff_exp  ? "<<((uint64_t)(a_T|1<<fp32_t)>>diff_exp)<<std::endl;
-    std::cout<<"b_T ? "<<b_T<<std::endl;
-    std::cout<<"(uint64_t)(b_T|1<<fp32_t) ? "<<(uint64_t)(b_T|1<<fp32_t)<<std::endl;
-    std::cout<<"(uint64_t)(b_T|1<<fp32_t)>>diff_exp  ? "<<((uint64_t)(b_T|1<<fp32_t)>>diff_exp)<<std::endl;
-
-    uint64_t c_a_ = ((uint64_t)(a_T|1<<fp32_t)>>diff_exp);
-    uint64_t c_b_ = (uint64_t)(b_T|1<<fp32_t);
-    c_T = c_a_ + c_b_;
-    std::cout<<"c_T ? "<<(c_T)<<std::endl;
-    uint32_t nor_bits = 0;
-    uint64_t nor_c_T = c_T >> fp32_t+1;
-    while(nor_c_T != 0) {
-        nor_bits++;
-        nor_c_T = nor_c_T >> 1;
-    }
-    nor_c_T = (c_T >> nor_bits) & 0x3FFFFF;
-    
-    c_T = nor_c_T;
-    c_E+=nor_bits;
-    uint64_t c_S = 0;
-    uint32_t c_int = c_S << (fp32_w+fp32_t) | c_E<< (fp32_t) | (uint32_t)c_T;
-    fp32 c = fp32(c_int);
-
-    std::cout<<"Floating Point: "<<(a.fval*b.fval)<<std::endl;
-
-    std::cout<<"Floating Point: "<<(c.fval)<<std::endl;
-    std::cout<<"Hex : 0x"<<std::hex<<c.ival<<std::endl;
-    std::cout<<" ---> S: "<<c_S<<std::dec<<"("<<c_S<<")"<<std::endl;
-    std::cout<<" ---> E: "<<c_E<<std::dec<<"("<<c_E<<")"<<std::endl;
-    std::cout<<" ---> T: "<<c_T<<std::dec<<"("<<c_T<<")"<<std::endl; 
     #endif
 
     return 0;

@@ -1,5 +1,11 @@
 # floating_point_operation
 
+build:
+$ g++ main.cpp fp32.cc FP16G.cc fp16.cc -o main
+
+Running:
+$ ./main
+
 C-based bit-level FP16/FP32 operator for designing and verifying a 16bits/32bits floating pointer hardware operator.
 1. FP32 Addition,
 2. FP32 Subtraction
