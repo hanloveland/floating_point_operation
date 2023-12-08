@@ -8,32 +8,145 @@
 int main() {
     std::random_device rd;
     std::mt19937 e2(rd());
-    std::uniform_real_distribution<> dist(0, 10);
+    std::uniform_real_distribution<> dist(-1,1);
+    std::uniform_real_distribution<> dist1(-1,1);
+    std::uniform_real_distribution<> dist2(-1,1);
 
+    uint64_t iter = 100000000;
+/*
+    FP16 Max Value: 65504
+    mallest positive subnormal number: 0.000000059604645
+    largest subnormal number: 0.000060975552
+    smallest positive normal number: 0.00006103515625
+    largest normal number: 65504
 
-    // fp16i bb(0);
-    float fp32_a = 3.2;
-    float fp32_b = 6.7;
-    float fp32_c = fp32_a + fp32_b;
+    fp16i bb(0);
+    Case
+     -> pINF + pINF
+     -> pINF + nINF
+     -> nINF + nINF
+     -> Normal + Normal 
+     -> Normal + Subnormal
+     -> Subnormal + Subnormal 
+*/
+    std::cout<<" Iteration : "<<iter<<std::endl;
+    for(int j=0;j<9;j++) {
+        if(j==0) {
+            std::cout<<" Case: pINF + pINF "<<std::endl;
+            std::uniform_real_distribution<> dist_1a(65505,65504*4);
+            std::uniform_real_distribution<> dist_1b(65505,65504*4);
+            dist1 = dist_1a;
+            dist2 = dist_1b;
+        } else if(j == 1) {
+            std::cout<<" Case: pINF + nINF "<<std::endl;
+            std::uniform_real_distribution<> dist_1a(65505,65504*4);
+            std::uniform_real_distribution<> dist_1b(-65505.0*4,-65505.0);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 3) {
+            std::cout<<" Case: nINF + nINF "<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-65505.0*4,-65505.0);
+            std::uniform_real_distribution<> dist_1b(-65505.0*4,-65505.0);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 4) {
+            std::cout<<" Case: Normal (-65505,65505) + Normal (-65505,65505)"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-65505,65505);
+            std::uniform_real_distribution<> dist_1b(-65505,65505);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 5) {
+            std::cout<<" Case: Normal (-6550,6550) + Normal (-6550,6550)"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-6550,6550);
+            std::uniform_real_distribution<> dist_1b(-6550,6550);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 6) {
+            std::cout<<" Case: Normal (-655,655) + Normal (-655,655)"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-655,655);
+            std::uniform_real_distribution<> dist_1b(-655,655);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 7) {
+            std::cout<<" Case: Normal (-65,65) + Normal (-65,65)"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-65,65);
+            std::uniform_real_distribution<> dist_1b(-65,65);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 7) {
+            std::cout<<" Case: Normal (-6,6) + Normal (-6,6)"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-6,6);
+            std::uniform_real_distribution<> dist_1b(-6,6);
+            dist1 = dist_1a;
+            dist2 = dist_1b;
+        } else if(j == 8) {
+            std::cout<<" Case: Normal (..,..) + SubNormal"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-0.0060975552,0.0060975552);
+            std::uniform_real_distribution<> dist_1b(-0.000060975552,0.000060975552);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        } else if(j == 8) {
+            std::cout<<" Case: SubNormal + SubNormal"<<std::endl;
+            std::uniform_real_distribution<> dist_1a(-0.000060975552,0.000060975552);
+            std::uniform_real_distribution<> dist_1b(-0.000060975552,0.000060975552);
+            dist1 = dist_1a;
+            dist2 = dist_1b;            
+        }        
+    for(uint64_t i=0;i<iter;i++) {
+        float fp32_a = dist1(e2);
+        float fp32_b = dist2(e2);
+        float fp32_c = fp32_a + fp32_b;
 
-    FP16g fp16g_a(fp16(0));
-    FP16g fp16g_b(fp16(0));
-    fp16g_a = fp16(fp32_a);
-    fp16g_b = fp16(fp32_b);
-    FP16g fp16g_c(fp16g_a + fp16g_b);
-    FP16 cc(float(3.4));
+        FP16g fp16g_a(fp16(0));
+        FP16g fp16g_b(fp16(0));
+        fp16g_a = fp16(fp32_a);
+        fp16g_b = fp16(fp32_b);
+        FP16g fp16g_c(fp16g_a + fp16g_b);
+        FP16 cc(float(3.4));
 
-    std::cout<<" FP32 "<<std::endl;
-    std::cout<<std::setprecision(16);
-    std::cout<<"  - A   :"<<fp32_a<<std::endl;
-    std::cout<<"  - B   :"<<fp32_b<<std::endl;
-    std::cout<<"  - A+B :"<<fp32_c<<std::endl;
+        FP16 fp16_a(uint16_t(0));
+        FP16 fp16_b(uint16_t(0));
+        fp16_a = fp16_u(fp32_a);
+        fp16_b = fp16_u(fp32_b);
+        FP16 fp16_c(fp16_a + fp16_b);   
 
-    std::cout<<" FP16 Golden "<<std::endl;
-    std::cout<<std::setprecision(16);
-    std::cout<<"  - A   :"<<fp16g_a.value<<std::endl;
-    std::cout<<"  - B   :"<<fp16g_b.value<<std::endl;
-    std::cout<<"  - A+B :"<<fp16g_c.value<<std::endl;    
+        fp16 diff = (fp16g_c.value - fp16_c.value.fval);
+        fp16 diff_ratio = diff/fp16g_c.value;
+        bool is_fail = false;
+        if(fp16g_c.value == 0.0) {
+            if(diff != 0) {
+                is_fail = true;   
+            }
+        }
+        else if(diff_ratio > 0.001) {
+                is_fail = true;
+        }
+        if(is_fail) {
+            std::cout<<" FP32 "<<std::endl;
+            std::cout<<std::setprecision(16);
+            std::cout<<"  - A   :"<<fp32_a<<std::endl;
+            std::cout<<"  - B   :"<<fp32_b<<std::endl;
+            std::cout<<"  - A+B :"<<fp32_c<<std::endl;
+
+            std::cout<<" FP16 Golden "<<std::endl;
+            std::cout<<std::setprecision(16);
+            std::cout<<"  - A   :"<<fp16g_a.value<<" / 0x"<<std::hex<<fp16i(fp16g_a.value).ival<<std::endl;
+            std::cout<<"  - B   :"<<fp16g_b.value<<" / 0x"<<std::hex<<fp16i(fp16g_b.value).ival<<std::endl;
+            std::cout<<"  - A+B :"<<fp16g_c.value<<" / 0x"<<std::hex<<fp16i(fp16g_c.value).ival<<std::endl;    
+
+            std::cout<<" FP16 Cal "<<std::endl;
+            std::cout<<std::setprecision(16);
+            std::cout<<"  - A   :"<<fp16_a.value.fval<<" / 0x"<<std::hex<<fp16_a.value.ival<<std::endl;
+            std::cout<<"  - B   :"<<fp16_b.value.fval<<" / 0x"<<std::hex<<fp16_b.value.ival<<std::endl;
+            std::cout<<"  - A+B :"<<fp16_c.value.fval<<" / 0x"<<std::hex<<fp16_c.value.ival<<std::endl;
+
+            std::cout<<"Fail!"<<std::endl;
+            std::cout<<"Diff "<<diff<<std::endl;
+            std::cout<<"Dif Ratio "<<diff_ratio<<std::endl;             
+            break;
+        }
+    }
+    }
     // fp16 a(3.2);
     // std::cout<<" A :"<<aa.toFloat()<<std::endl;
     // aa.fromFloat(3.2);
