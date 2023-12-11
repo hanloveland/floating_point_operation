@@ -115,7 +115,7 @@ FP16 FP16::operator+(const FP16& other) const {
         #endif
         // Post-Normalization 
 
-        uint16_t lzd = 0; // Leading-zero Detecher 
+        uint16_t lzd = 0; // Leading-zero Detector 
         if(is_Add != 1) {
             //  RawManAdd[12:0]
             for(uint16_t i=0;i<13;i++) {
