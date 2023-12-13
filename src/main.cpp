@@ -4,6 +4,7 @@
 #include <random>
 #include "FP16G.h"
 #include "fp16.h"
+#include "lib_fp16.cc"
 
 int main() {
     std::random_device rd;
@@ -11,6 +12,51 @@ int main() {
     std::uniform_real_distribution<> dist(-1,1);
     std::uniform_real_distribution<> dist1(-1,1);
     std::uniform_real_distribution<> dist2(-1,1);
+
+        #if 0
+        float fp32_a = 1.3;//dist1(e2);
+        float fp32_b = -1.35;//dist2(e2);
+        float fp32_c = fp32_a + fp32_b;
+
+        FP16g fp16g_a(fp16(0));
+        FP16g fp16g_b(fp16(0));
+        fp16g_a = fp16(fp32_a);
+        fp16g_b = fp16(fp32_b);
+        FP16g fp16g_c(fp16g_a + fp16g_b);
+        FP16 cc(float(3.4));
+
+        FP16 fp16_a(uint16_t(0));
+        FP16 fp16_b(uint16_t(0));
+        fp16_a = fp16_u(fp32_a);
+        fp16_b = fp16_u(fp32_b);
+        FP16 fp16_c(fp16_a + fp16_b);   
+
+        fp16 diff = (fp16g_c.value - fp16_c.value.fval);
+        fp16 diff_ratio = diff/fp16g_c.value;
+        bool is_fail = false;
+
+        std::cout<<" FP32 "<<std::endl;
+        std::cout<<std::setprecision(16);
+        std::cout<<"  - A   :"<<fp32_a<<std::endl;
+        std::cout<<"  - B   :"<<fp32_b<<std::endl;
+        std::cout<<"  - A+B :"<<fp32_c<<std::endl;
+
+        std::cout<<" FP16 Golden "<<std::endl;
+        std::cout<<std::setprecision(16);
+        std::cout<<"  - A   :"<<fp16g_a.value<<" / 0x"<<std::hex<<fp16i(fp16g_a.value).ival<<std::endl;
+        std::cout<<"  - B   :"<<fp16g_b.value<<" / 0x"<<std::hex<<fp16i(fp16g_b.value).ival<<std::endl;
+        std::cout<<"  - A+B :"<<fp16g_c.value<<" / 0x"<<std::hex<<fp16i(fp16g_c.value).ival<<std::endl;    
+
+        std::cout<<" FP16 Cal "<<std::endl;
+        std::cout<<std::setprecision(16);
+        std::cout<<"  - A   :"<<fp16_a.value.fval<<" / 0x"<<std::hex<<fp16_a.value.ival<<std::endl;
+        std::cout<<"  - B   :"<<fp16_b.value.fval<<" / 0x"<<std::hex<<fp16_b.value.ival<<std::endl;
+        std::cout<<"  - A+B :"<<fp16_c.value.fval<<" / 0x"<<std::hex<<fp16_c.value.ival<<std::endl;
+
+        std::cout<<"Fail!"<<std::endl;
+        std::cout<<"Diff "<<diff<<std::endl;
+        std::cout<<"Dif Ratio "<<diff_ratio<<std::endl;             
+        #endif
 
     uint64_t iter = 100000000;
 /*
@@ -29,8 +75,13 @@ int main() {
      -> Normal + Subnormal
      -> Subnormal + Subnormal 
 */
+    #if 1
     std::cout<<" Iteration : "<<iter<<std::endl;
+
     for(int j=0;j<9;j++) {
+    uint64_t pass = 0;
+    uint32_t fail = 0;    
+        std::cout<<"================================="<<std::endl;
         if(j==0) {
             std::cout<<" Case: pINF + pINF "<<std::endl;
             std::uniform_real_distribution<> dist_1a(65505,65504*4);
@@ -110,17 +161,14 @@ int main() {
         fp16_b = fp16_u(fp32_b);
         FP16 fp16_c(fp16_a + fp16_b);   
 
-        fp16 diff = (fp16g_c.value - fp16_c.value.fval);
-        fp16 diff_ratio = diff/fp16g_c.value;
         bool is_fail = false;
-        if(fp16g_c.value == 0.0) {
-            if(diff != 0) {
-                is_fail = true;   
-            }
-        }
-        else if(diff_ratio > 0.001) {
-                is_fail = true;
-        }
+        fp16i golden_c(fp16g_c.value);
+        uint16_t diff_int = (golden_c.ival > fp16_c.value.ival) ? golden_c.ival - fp16_c.value.ival : fp16_c.value.ival - golden_c.ival;
+        if(diff_int > 1) is_fail = true;   
+        
+        uint16_t lib_fp16_c = fp16_add(fp16_a.value.ival,fp16_b.value.ival);        
+        if(lib_fp16_c != fp16_c.value.ival) is_fail = true;
+
         if(is_fail) {
             std::cout<<" FP32 "<<std::endl;
             std::cout<<std::setprecision(16);
@@ -140,20 +188,21 @@ int main() {
             std::cout<<"  - B   :"<<fp16_b.value.fval<<" / 0x"<<std::hex<<fp16_b.value.ival<<std::endl;
             std::cout<<"  - A+B :"<<fp16_c.value.fval<<" / 0x"<<std::hex<<fp16_c.value.ival<<std::endl;
 
+            std::cout<<" Lib FP16 Adder : 0x"<<lib_fp16_c<<std::endl;
             std::cout<<"Fail!"<<std::endl;
-            std::cout<<"Diff "<<diff<<std::endl;
-            std::cout<<"Dif Ratio "<<diff_ratio<<std::endl;             
+            fail++;
+            exit(1);
             break;
+        } else {
+            pass++;
         }
     }
+
+        std::cout<<" -- Result"<<std::endl;
+        std::cout<<" -- Pass: "<<std::dec<<pass<<" / Fail: "<<fail<<std::endl;
+        std::cout<<"================================="<<std::endl;
     }
-    // fp16 a(3.2);
-    // std::cout<<" A :"<<aa.toFloat()<<std::endl;
-    // aa.fromFloat(3.2);
-    // std::cout<<" A :"<<aa.value<<std::endl;
-    // std::cout<<" A :"<<a<<std::endl;
-    // ->fromFloat(3.2);
-    // aa.fromFloat(3.2);
+    #endif
 
     return 0;
 

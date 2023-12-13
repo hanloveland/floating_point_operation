@@ -4,7 +4,7 @@
 // #define PRINT_DEBUG 1
 #include <stdint.h> 
 #include <cstdio>
-#include "svdpi.h"
+// #include "svdpi.h"
 
 #define K_WIDTH 16
 #define E_WIDTH 5
@@ -15,6 +15,7 @@
 #define E_MAX 31
 #define E_MIN 0
 #define qNaN 0xFFFF //qNaN
+#define sNaN 0x7FFF //sNaN
 #define pInf 0x7C00
 #define nInf 0xFC00
 #define pzero 0x0000
@@ -179,15 +180,26 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     uint16_t Exp_diff  = (is_large_a_exp == 1) ? (fp16_a_e - fp16_b_e) :
                                                  (fp16_b_e - fp16_a_e);
     Exp_diff = Exp_diff - compensated_Exp;
+    RawExp = Exp_diff > 3 ? (RawExp-3) : (RawExp - Exp_diff);
+
+    uint16_t LShift  = (Exp_diff > 3) ? 3          : Exp_diff;
+    uint16_t RShift  = (Exp_diff > 3) ? Exp_diff-3 : 0;
     uint16_t SignOut = (is_large_a == 1)      ? fp16_a_s : fp16_b_s;
     uint16_t is_Add  = (fp16_a_s == fp16_b_s) ? 1        : 0;
     
-    // Align Little Mantissa 
-    uint16_t Shifted_LitMan = LitMan >> Exp_diff;
-    uint16_t Round_Bit = (Exp_diff == 0) || (Exp_diff > 11) ? 0 : ((LitMan >> (Exp_diff-1)) & 0x1);
-    uint16_t Sticky_Bits = (LitMan & ((0x1 << Exp_diff) - 0x1));
+    // Align Big/Little Mantissa 
+    uint16_t Shifted_BigMan = (uint16_t)(BigMan << LShift);
+    uint16_t Shifted_LitMan = (uint16_t)(LitMan >> RShift);    
+
+    uint16_t Gaurd_Bit = (uint16_t)((uint16_t)(LitMan >> RShift) & 0x1);
+    uint16_t Round_Bit = (Exp_diff <= 3) ? 0   :
+                            (Exp_diff > 14) ? 0   : ((LitMan >> (Exp_diff-4)) & 0x1);                
+    uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift)) - 0x1));
     uint16_t Sticky_Bit = 0;
     for(uint16_t i=0;i<16;i++) if((Sticky_Bits>>i) & 0x1 == 1) Sticky_Bit = 1;
+    uint16_t LitMan_GRS = (uint16_t)(Gaurd_Bit << 2) + (uint16_t)(Round_Bit << 1) +  Sticky_Bit;
+    uint16_t LitMan_RoundUp = (LitMan_GRS == 3 || LitMan_GRS == 6 || LitMan_GRS == 7) ? 1 : 0;
+    Shifted_LitMan = Shifted_LitMan + LitMan_RoundUp;
 
     #ifdef PRINT_DEBUG
     printf(" Compare Exponents and Align Mantissa\n");
@@ -196,20 +208,21 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     printf("  - BigMan          : %x\n",BigMan);                                                 
     printf("  - LitMan          : %x\n",LitMan);                                                 
     printf("  - Exp_diff        : %x\n",Exp_diff);                                                 
+    printf("  - Shifted_BigMan  : %x\n",Shifted_BigMan);                                                     
     printf("  - Shifted_LitMan  : %x\n",Shifted_LitMan);                                                 
     printf("  - Round_Bit       : %x\n",Round_Bit);  
     printf("  - Sticky_Bit      : %x\n",Sticky_Bit);
+    printf("  - LitMan_GRS      : %x\n",LitMan_GRS);
+    
     #endif
 
-    uint16_t shifted_Bigman = BigMan<<2;
-    uint16_t Shifted_Shifted_LitMan = Shifted_LitMan<<2;
-    uint16_t Shifted_Round_Bit = Round_Bit<<1;
     uint16_t RawManAdd;
+    // Performan 16-bits addition or subtraction
     if(is_Add == 1) {
-        RawManAdd = shifted_Bigman + Shifted_Shifted_LitMan + Shifted_Round_Bit + Sticky_Bit;
+        RawManAdd = Shifted_BigMan + Shifted_LitMan;//+ Shifted_Round_Bit + Sticky_Bit;
     } else {
-        uint16_t sub_LitMan = ~(Shifted_Shifted_LitMan + Shifted_Round_Bit + Sticky_Bit) + 1;
-        RawManAdd = shifted_Bigman + sub_LitMan;
+        uint16_t sub_LitMan = ~(Shifted_LitMan) + 1;
+        RawManAdd = Shifted_BigMan + sub_LitMan;
     }
     #ifdef PRINT_DEBUG
     printf(" Mantissa Addition\n");
@@ -218,63 +231,74 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     // Post-Normalization 
 
     uint16_t lzd = 0; // Leading-zero Detector 
-    if(is_Add != 1) {
-        //  RawManAdd[12:0]
-        for(uint16_t i=0;i<13;i++) {
-            uint16_t one_bit = (uint16_t)(RawManAdd>>i) & 0x1;
-            if(one_bit == 0x1) lzd = i;
-        }
+    for(uint16_t i=0;i<16;i++) {
+        uint16_t one_bit = (uint16_t)(RawManAdd>>i) & 0x1;
+        if(one_bit == 0x1) lzd = i;
     }
-    uint16_t rshit =(uint16_t)(12-lzd);
-    uint16_t rshifted_RawManAdd = (uint16_t)(RawManAdd << rshit);
-    uint16_t is_msb_13 = ((RawManAdd >> 13) == 1) ? 1 : 0;
+    uint16_t rshift = (lzd > 10) ? (uint16_t)(lzd - 10)   : (uint16_t)0;
+    uint16_t lshift = (lzd < 10) ? (uint16_t)(10 - lzd)   : (uint16_t)0;
+    uint16_t not_shift = (lzd == 10) ? 1 : 0;    
 
-    uint16_t GRS_bits;
-    if(is_msb_13) {            
-        uint16_t RawManAdd_Sticky_Bit = 0;
-        uint16_t RawManAdd_GR_Bits = ((RawManAdd >>2) & 0x3) << 1;
-        for(uint16_t i=0;i<2;i++) if((Sticky_Bits>>i) & 0x1 == 1) RawManAdd_Sticky_Bit = 1;            
-        GRS_bits = RawManAdd_GR_Bits + RawManAdd_Sticky_Bit;
+    uint16_t rshifted_RawMan;
+    if(rshift > 0) {
+        // maximun rshift is 4 when lzd is 15
+        uint16_t rshifted_rbit = (uint16_t)((RawManAdd >> (rshift-1)) & 0x1);
+        uint16_t rshifted_sbits = (rshift >= 2) ? (uint16_t)(RawManAdd & (uint16_t)((0x1<<(rshift-0x1))-0x1)) : 0;
+        uint16_t rshifted_sbit = 0;
+        if(rshifted_sbits != 0) rshifted_sbit = 1;
+        uint16_t rshifted_gbit = (uint16_t)(RawManAdd >> (rshift)) & 0x1;
+        uint16_t rshifted_grs = (uint16_t)(rshifted_gbit << 2) + (uint16_t)(rshifted_rbit << 1) + (uint16_t)rshifted_sbit;
+        uint16_t RoundUp = (rshifted_grs == 3 || rshifted_grs == 6 || rshifted_grs == 7) ? 1 : 0;
+        rshifted_RawMan  = (uint16_t)(RawManAdd >> rshift);
+        rshifted_RawMan = rshifted_RawMan + RoundUp;
         #ifdef PRINT_DEBUG
-            printf("  - RawManAdd_Sticky_Bit : %x\n",RawManAdd_Sticky_Bit);
-            printf("  - RawManAdd_GR_Bits    : %x\n",RawManAdd_GR_Bits);
+            printf("  - (RShift)rshifted_rbit       : %x\n",rshifted_rbit);
+            printf("  - (RShift)rshifted_sbits_mask : %x\n",(uint16_t)((0x1<<(rshift-0x1))-0x1));
+            printf("  - (RShift)rshifted_sbits_mask : %x\n",(uint16_t)(RawManAdd & (uint16_t)((0x1<<(rshift-0x1))-0x1)));
+            printf("  - (RShift)rshifted_sbits      : %x\n",rshifted_sbits);
+            printf("  - (RShift)rshifted_sbit       : %x\n",rshifted_sbit);
+            printf("  - (RShift)rshifted_grs        : %x\n",rshifted_grs);
+            printf("  - (RShift)RoundUp             : %x\n",RoundUp);
+            printf("  - (RShift)rshifted_RawMan     : %x\n",rshifted_RawMan);
         #endif
-    } else {
-        if(is_Add == 1 || is_both_subnormal) GRS_bits = RawManAdd & 0x7;
-        else                                 GRS_bits = rshifted_RawManAdd & 0x7;
     }
+    uint16_t rshifted_exp_up = 0;
+    if((rshifted_RawMan >> 11) == 0x1) {
+        rshifted_exp_up = 1;
+        rshifted_RawMan = rshifted_RawMan >> 1;
+    }    
+    
+    uint16_t lshifted_RawMan = (uint16_t)(RawManAdd << lshift);
+    uint16_t rshifted_RawMan_Zero = (uint16_t)(RawManAdd << (RawExp-1));
 
-    uint16_t RoundUp = (GRS_bits == 3 || GRS_bits == 6 || GRS_bits == 7) ? 1 : 0;
-    uint16_t PostNormMan = (is_msb_13 == 1)                       ? (uint16_t)(RawManAdd >> 3) + RoundUp :
-                            (is_Add == 1 || is_both_subnormal)    ? (uint16_t)(RawManAdd >> 2) + RoundUp :
-                                                                    (uint16_t)(rshifted_RawManAdd >> 2) + RoundUp;                                                
-
-    uint16_t NormMan = (((PostNormMan >> 11) == 1) ?  PostNormMan >> 1 : PostNormMan) & M_MASK;
-    uint16_t NormExp = (uint16_t)(RawExp + is_msb_13 + ((PostNormMan >> 11) == 1)) + (uint16_t)(is_both_subnormal & ((PostNormMan >> 10) == 1));
+    uint16_t shifted_RawManAdd = (not_shift == 1) ? RawManAdd : (rshift > 0)      ? rshifted_RawMan       
+                                                              : (RawExp > lshift) ? lshifted_RawMan
+                                                              : (RawExp > 1)      ? rshifted_RawMan_Zero
+                                                                                  : RawManAdd;  
+    uint16_t NormExp = (not_shift == 1) ? (RawExp == 0 ? 1 : RawExp) : (rshift > 0) ? (RawExp + rshift + rshifted_exp_up) : (RawExp > lshift) ? (RawExp - lshift) : 0;
+    uint16_t NormMan = shifted_RawManAdd & M_MASK;    
     uint16_t CalOut = SignOut << (E_WIDTH + M_WIDTH) | NormExp << M_WIDTH | NormMan;
 
 
+
     #ifdef PRINT_DEBUG
-    printf("  - lzd                : %x\n",lzd);
-    printf("  - rshit              : %x\n",rshit);
-    printf("  - rshifted_RawManAdd : %x\n",rshifted_RawManAdd);
-    printf("  - is_msb_13          : %x\n",is_msb_13);
-    printf("  - GRS_bits           : %x\n",GRS_bits);
-    printf("  - RoundUp            : %x\n",RoundUp);
-    printf("  - PostNormMan        : %x\n",PostNormMan);
-    printf("  - NormMan            : %x\n",NormMan);
-    printf("  - NormExp            : %x\n",NormExp);
-    printf("  - CalOut             : %x\n",CalOut);
+        printf("  - lzd                : %x\n",lzd);
+        printf("  - rshift             : %x\n",rshift);
+        printf("  - lshift             : %x\n",lshift);
+        printf("  - RawManAdd          : %x\n",RawManAdd);
+        printf("  - NormMan            : %x\n",NormMan);
+        printf("  - NormExp            : %x\n",NormExp);
+        printf("  - CalOut             : %x\n",CalOut);
     #endif
     if(fp16_a_nan == 1 || fp16_b_nan == 1) 
         return uint16_t(qNaN);
     else if((fp16_a_inf == 1 && fp16_b_inf == 1) && (fp16_a_s != fp16_b_s)) 
-        return uint16_t(qNaN);
-    else if((fp16_a_inf == 1 && fp16_a_s == 0) || (fp16_b_inf == 1 && fp16_a_s == 0)) 
+        return uint16_t(sNaN);
+    else if((fp16_a_inf == 1 && fp16_a_s == 0) || (fp16_b_inf == 1 && fp16_b_s == 0)) 
         return uint16_t(pInf);
-    else if((fp16_a_inf == 1 && fp16_a_s == 1) || (fp16_b_inf == 1 && fp16_a_s == 1)) 
+    else if((fp16_a_inf == 1 && fp16_a_s == 1) || (fp16_b_inf == 1 && fp16_b_s == 1)) 
         return uint16_t(nInf);
-    else if(PostNormMan == 0) 
+    else if(RawManAdd == 0) 
         return uint16_t(pzero);
     else if(NormExp == E_MAX && SignOut == 0) 
         return uint16_t(pInf);
@@ -286,32 +310,31 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     } 
     else return uint16_t(CalOut);
     
-    // return fp16_c;
 }
 
 
-DPI_DLLESPEC
-int fp16_add_int(int int_a, int int_b) {
-    uint16_t fp16_a = int_a & 0xFFFF;
-    uint16_t fp16_b = int_a & 0xFFFF;
-    uint16_t fp16_c = fp16_add(fp16_a,fp16_b);
-    return (int)fp16_c;
-}
+// DPI_DLLESPEC
+// int fp16_add_int(int int_a, int int_b) {
+//     uint16_t fp16_a = int_a & 0xFFFF;
+//     uint16_t fp16_b = int_a & 0xFFFF;
+//     uint16_t fp16_c = fp16_add(fp16_a,fp16_b);
+//     return (int)fp16_c;
+// }
 
-DPI_DLLESPEC
-int FP32_to_FP16(float fp32_value){
-    union fp32f tmp = {fp32_value};
-    uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
-    return (int)uint16_value;
-};
+// DPI_DLLESPEC
+// int FP32_to_FP16(float fp32_value){
+//     union fp32f tmp = {fp32_value};
+//     uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
+//     return (int)uint16_value;
+// };
 
-DPI_DLLESPEC
-float FP16_to_FP32(int fp16_value){
-    uint16_t tmp = fp16_value & 0xffff;
-    uint32_t fp32_int = npy_halfbits_to_floatbits(tmp);
-    union fp32i union_tmp = {fp32_int};
-    // uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
-    return union_tmp.fval;
-};
+// DPI_DLLESPEC
+// float FP16_to_FP32(int fp16_value){
+//     uint16_t tmp = fp16_value & 0xffff;
+//     uint32_t fp32_int = npy_halfbits_to_floatbits(tmp);
+//     union fp32i union_tmp = {fp32_int};
+//     // uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
+//     return union_tmp.fval;
+// };
 
 #endif

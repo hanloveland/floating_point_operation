@@ -11,6 +11,7 @@
 #define E_MAX 31
 #define E_MIN 0
 #define qNaN 0xFFFF //qNaN
+#define sNaN 0x7FFF //sNaN
 #define pInf 0x7C00
 #define nInf 0xFC00
 #define pzero 0x0000
@@ -39,16 +40,12 @@ FP16 FP16::operator+(const FP16& other) const {
         return FP16(uint16_t(qNaN));
     } else if((is_inf() && other.is_inf()) && (get_sign() != other.get_sign())) { // Invalid Operation
         #ifdef PRINT_DEBUG
-            std::cout<<"return qNaN"<<std::endl;
+            std::cout<<"return sNaN"<<std::endl;
         #endif
-        return FP16(uint16_t(qNaN));     
+        return FP16(uint16_t(sNaN));     
     } else if(is_inf() || other.is_inf()) { // Infinity Arthmetic
         if((is_inf() && get_sign() == 0) || (other.is_inf() && other.get_sign() == 0)) return FP16(uint16_t(pInf));  
         else                                                                           return FP16(uint16_t(nInf));  
-    // } else if(is_subnor() && other.is_subnor()) { // Sub-normal Operation 
-    //     //TBD (maybe..not support)
-    //     std::cout<<"return surbnormal (TBD)"<<std::endl;  
-    //     return FP16(uint16_t(pzero));     
     } else if(is_zero() || other.is_zero()) { // One of Operands is zero, return the other value
         if(is_zero())   return other;
         else            return FP16(value);
@@ -62,29 +59,44 @@ FP16 FP16::operator+(const FP16& other) const {
         #endif
         // Compare Exponents & Mantissa 
         uint16_t is_both_sub    = is_subnor() && other.is_subnor();
-        uint16_t is_large_a_exp = get_expo() > other.get_expo() ? 1 : 0;        // Compare Exponent for Input A and Input B
-        uint16_t is_same_exp    = get_expo() == other.get_expo() ? 1 : 0;       // Compare Exponent for Input A and Input B
-        uint16_t is_large_a_man = get_emani() > other.get_emani() ? 1 : 0;
+        uint16_t is_large_a_exp = get_expo() > other.get_expo()   ? 1 : 0;        // Compare Exponent for Input A and Input B
+        uint16_t is_same_exp    = get_expo() == other.get_expo()  ? 1 : 0;        // Compare Exponent for Input A and Input B
+        uint16_t is_large_a_man = get_emani() > other.get_emani() ? 1 : 0;        // Compare Mantissa for Input A and Input B
         uint16_t is_large_a     = is_large_a_exp == 1 ? 1 : (is_same_exp == 1 ? (is_large_a_man == 1 ? 1 : 0) : 0);
 
         uint16_t RawExp     = (is_large_a_exp == 1) ? get_expo() : other.get_expo();
         uint16_t BigMan     = ((is_large_a_exp == 1) || (is_same_exp && is_large_a_man)) ? get_emani() : other.get_emani();
         uint16_t LitMan     = ((is_large_a_exp == 1) || (is_same_exp && is_large_a_man)) ? other.get_emani() : get_emani();
 
+        // if one of operand is subnormal, decrease the exponent difference by one
+        // e.g., exponent is zero (subnormal), this mean exponent is same with exponent one 
         uint16_t compensated_Exp = (is_subnor() ^ other.is_subnor()) ? 1 : 0;
         uint16_t Exp_diff  = (is_large_a_exp == 1) ? (get_expo() - other.get_expo()) :
                                                      (other.get_expo() - get_expo());
         Exp_diff = Exp_diff - compensated_Exp;
-        uint16_t SignOut = is_large_a == 1 ? get_sign() : other.get_sign();
-        uint16_t is_Add = (get_sign() == other.get_sign()) ? 1 : 0;
+        RawExp = Exp_diff > 3 ? (RawExp-3) : (RawExp - Exp_diff);
         
-        // Align Little Mantissa 
-        uint16_t Shifted_LitMan = LitMan >> Exp_diff;
-        uint16_t Round_Bit = (Exp_diff == 0) || (Exp_diff > 11) ? 0 : ((LitMan >> (Exp_diff-1)) & 0x1);
-        uint16_t Sticky_Bits = (LitMan & ((0x1 << Exp_diff) - 0x1));
+        // Maximum Left Shift for BigMant is 3
+        // Exp_Diff 1 ~ 3: Shift Left, Exp_Diff > 3: Shift Right 
+        uint16_t LShift  = (Exp_diff > 3) ? 3          : Exp_diff;
+        uint16_t RShift  = (Exp_diff > 3) ? Exp_diff-3 : 0;
+        // SignOut is same with large operand
+        uint16_t SignOut = is_large_a == 1 ? get_sign() : other.get_sign();
+        // if both operands are same, do addition, else subtraction
+        uint16_t is_Add = (get_sign() == other.get_sign()) ? 1 : 0;
+
+        // Align Big/Little Mantissa 
+        uint16_t Shifted_BigMan = (uint16_t)(BigMan << LShift);
+        uint16_t Shifted_LitMan = (uint16_t)(LitMan >> RShift);
+        uint16_t Gaurd_Bit = (uint16_t)((uint16_t)(LitMan >> RShift) & 0x1);
+        uint16_t Round_Bit = (Exp_diff <= 3) ? 0   :
+                             (Exp_diff > 14) ? 0   : ((LitMan >> (Exp_diff-4)) & 0x1);                
+        uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift)) - 0x1));
         uint16_t Sticky_Bit = 0;
         for(uint16_t i=0;i<16;i++) if((Sticky_Bits>>i) & 0x1 == 1) Sticky_Bit = 1;
-
+        uint16_t LitMan_GRS = (uint16_t)(Gaurd_Bit << 2) + (uint16_t)(Round_Bit << 1) +  Sticky_Bit;
+        uint16_t LitMan_RoundUp = (LitMan_GRS == 3 || LitMan_GRS == 6 || LitMan_GRS == 7) ? 1 : 0;
+        Shifted_LitMan = Shifted_LitMan + LitMan_RoundUp;
         #ifdef PRINT_DEBUG
             std::cout<<" Compare Exponents and Align Mantissa"<<std::endl;
             std::cout<<" is_both_sub     : "<<std::hex<<is_both_sub<<std::endl;
@@ -92,81 +104,125 @@ FP16 FP16::operator+(const FP16& other) const {
             std::cout<<" BigMan          : "<<std::hex<<BigMan<<std::endl;                                                 
             std::cout<<" LitMan          : "<<std::hex<<LitMan<<std::endl;                                                 
             std::cout<<" Exp_diff        : "<<std::hex<<Exp_diff<<std::endl;                                                 
+            std::cout<<" LShift          : "<<std::hex<<LShift<<std::endl;      
+            std::cout<<" RShift          : "<<std::hex<<RShift<<std::endl;      
             std::cout<<" Shifted_LitMan  : "<<std::hex<<Shifted_LitMan<<std::endl;                                                 
+            std::cout<<" Gaurd_Bit       : "<<std::hex<<Gaurd_Bit<<std::endl;              
             std::cout<<" Round_Bit       : "<<std::hex<<Round_Bit<<std::endl;  
-            std::cout<<" Sticky_Bit      : "<<std::hex<<Sticky_Bit<<std::endl;  
+            std::cout<<" Sticky_Bit      : "<<std::hex<<Sticky_Bit<<std::endl; 
+            std::cout<<" LitMan_GRS      : "<<std::hex<<LitMan_GRS<<std::endl;              
+            std::cout<<" LitMan_RoundUp  : "<<std::hex<<LitMan_RoundUp<<std::endl; 
+            std::cout<<" Shifted_BigMan  : "<<std::hex<<Shifted_BigMan<<std::endl;  
+            std::cout<<" Shifted_LitMan  : "<<std::hex<<Shifted_LitMan<<std::endl;              
         #endif
-        // Mantissa Addition (Both Sigh are same)
-        // get_sign() == other.get_sign()
 
-        uint16_t shifted_Bigman = BigMan<<2;
-        uint16_t Shifted_Shifted_LitMan = Shifted_LitMan<<2;
-        uint16_t Shifted_Round_Bit = Round_Bit<<1;
+        // Remove last two bits to replace with Round and Sticky bit
+        // uint16_t Shifted_Shifted_LitMan = Shifted_LitMan & 0x7FC;
+        // uint16_t Shifted_Round_Bit = Round_Bit<<1;
         uint16_t RawManAdd;
+        // Performan 16-bits addition or subtraction
         if(is_Add == 1) {
-            RawManAdd = shifted_Bigman + Shifted_Shifted_LitMan + Shifted_Round_Bit + Sticky_Bit;
+            RawManAdd = Shifted_BigMan + Shifted_LitMan;//+ Shifted_Round_Bit + Sticky_Bit;
         } else {
-            uint16_t sub_LitMan = ~(Shifted_Shifted_LitMan + Shifted_Round_Bit + Sticky_Bit) + 1;
-            RawManAdd = shifted_Bigman + sub_LitMan;
+            uint16_t sub_LitMan = ~(Shifted_LitMan) + 1;
+            RawManAdd = Shifted_BigMan + sub_LitMan;
         }
         #ifdef PRINT_DEBUG
             std::cout<<" Mantissa Addition"<<std::endl;
             std::cout<<" RawManAdd          : "<<std::hex<<RawManAdd<<std::endl;
         #endif
+
         // Post-Normalization 
-
         uint16_t lzd = 0; // Leading-zero Detector 
-        if(is_Add != 1) {
-            //  RawManAdd[12:0]
-            for(uint16_t i=0;i<13;i++) {
-                uint16_t one_bit = (uint16_t)(RawManAdd>>i) & 0x1;
-                if(one_bit == 0x1) lzd = i;
-            }
+        for(uint16_t i=0;i<16;i++) {
+            uint16_t one_bit = (uint16_t)(RawManAdd>>i) & 0x1;
+            if(one_bit == 0x1) lzd = i;
         }
-        uint16_t rshit =(uint16_t)(12-lzd);
-        uint16_t rshifted_RawManAdd = (uint16_t)(RawManAdd << rshit);
-        uint16_t is_msb_13 = ((RawManAdd >> 13) == 1) ? 1 : 0;
 
-        uint16_t GRS_bits;
-        if(is_msb_13) {            
-            uint16_t RawManAdd_Sticky_Bit = 0;
-            uint16_t RawManAdd_GR_Bits = ((RawManAdd >>2) & 0x3) << 1;
-            for(uint16_t i=0;i<2;i++) if((Sticky_Bits>>i) & 0x1 == 1) RawManAdd_Sticky_Bit = 1;            
-            GRS_bits = RawManAdd_GR_Bits + RawManAdd_Sticky_Bit;
+        uint16_t rshift = (lzd > 10) ? (uint16_t)(lzd - 10)   : (uint16_t)0;
+        uint16_t lshift = (lzd < 10) ? (uint16_t)(10 - lzd)   : (uint16_t)0;
+        uint16_t not_shift = (lzd == 10) ? 1 : 0;
+        
+        uint16_t rshifted_RawMan;
+        if(rshift > 0) {
+            // maximun rshift is 4 when lzd is 15
+            uint16_t rshifted_rbit = (uint16_t)((RawManAdd >> (rshift-1)) & 0x1);
+            uint16_t rshifted_sbits = (rshift >= 2) ? (uint16_t)(RawManAdd & (uint16_t)((0x1<<(rshift-0x1))-0x1)) : 0;
+            uint16_t rshifted_sbit = 0;
+            if(rshifted_sbits != 0) rshifted_sbit = 1;
+            uint16_t rshifted_gbit = (uint16_t)(RawManAdd >> (rshift)) & 0x1;
+            uint16_t rshifted_grs = (uint16_t)(rshifted_gbit << 2) + (uint16_t)(rshifted_rbit << 1) + (uint16_t)rshifted_sbit;
+            uint16_t RoundUp = (rshifted_grs == 3 || rshifted_grs == 6 || rshifted_grs == 7) ? 1 : 0;
+            rshifted_RawMan  = (uint16_t)(RawManAdd >> rshift);
+            rshifted_RawMan = rshifted_RawMan + RoundUp;
             #ifdef PRINT_DEBUG
-                std::cout<<" RawManAdd_Sticky_Bit: "<<std::hex<<RawManAdd_Sticky_Bit<<std::endl;
-                std::cout<<" RawManAdd_GR_Bits   : "<<std::hex<<RawManAdd_GR_Bits<<std::endl;
+                std::cout<<" (RShift)rshifted_rbit      : "<<std::hex<<rshifted_rbit<<std::endl;
+                std::cout<<" (RShift)rshifted_sbits_mask : "<<std::hex<<(uint16_t)((0x1<<(rshift-0x1))-0x1)<<std::endl;
+                std::cout<<" (RShift)rshifted_sbits_mask : "<<std::hex<<(uint16_t)(RawManAdd & (uint16_t)((0x1<<(rshift-0x1))-0x1))<<std::endl;
+                std::cout<<" (RShift)rshifted_sbits     : "<<std::hex<<rshifted_sbits<<std::endl;
+                std::cout<<" (RShift)rshifted_sbit      : "<<std::hex<<rshifted_sbit<<std::endl;
+                std::cout<<" (RShift)rshifted_grs       : "<<std::hex<<rshifted_grs<<std::endl;
+                std::cout<<" (RShift)RoundUp            : "<<std::hex<<RoundUp<<std::endl;
+                std::cout<<" (RShift)rshifted_RawMan    : "<<std::hex<<rshifted_RawMan<<std::endl;
             #endif
-        } else {
-            if(is_Add == 1 || is_both_sub) GRS_bits = RawManAdd & 0x7;
-            else                           GRS_bits = rshifted_RawManAdd & 0x7;
         }
+        uint16_t rshifted_exp_up = 0;
+        if((rshifted_RawMan >> 11) == 0x1) {
+            rshifted_exp_up = 1;
+            rshifted_RawMan = rshifted_RawMan >> 1;
+        }
+        uint16_t lshifted_RawMan = (uint16_t)(RawManAdd << lshift);
+        uint16_t shifted_RawManAdd = (not_shift == 1) ? RawManAdd : (rshift > 0)      ? rshifted_RawMan       
+                                                                  : (RawExp > lshift) ? lshifted_RawMan
+                                                                  : (RawExp > 1)      ? (uint16_t)(RawManAdd << (RawExp-1))
+                                                                                      : RawManAdd;                                                                            
+        // uint16_t is_msb_13 = ((RawManAdd >> 13) == 1) ? 1 : 0;
 
-        uint16_t RoundUp = (GRS_bits == 3 || GRS_bits == 6 || GRS_bits == 7) ? 1 : 0;
-        uint16_t PostNormMan = (is_msb_13 == 1)                ? (uint16_t)(RawManAdd >> 3) + RoundUp :
-                               (is_Add == 1 || is_both_sub)    ? (uint16_t)(RawManAdd >> 2) + RoundUp :
-                                                                 (uint16_t)(rshifted_RawManAdd >> 2) + RoundUp;                                                
+        // uint16_t GRS_bits;
+        // if(is_msb_13) {            
+        //     uint16_t RawManAdd_Sticky_Bit = 0;
+        //     uint16_t RawManAdd_GR_Bits = ((RawManAdd >>2) & 0x3) << 1;
+        //     for(uint16_t i=0;i<2;i++) if((Sticky_Bits>>i) & 0x1 == 1) RawManAdd_Sticky_Bit = 1;            
+        //     GRS_bits = RawManAdd_GR_Bits + RawManAdd_Sticky_Bit;
+        //     #ifdef PRINT_DEBUG
+        //         std::cout<<" RawManAdd_Sticky_Bit: "<<std::hex<<RawManAdd_Sticky_Bit<<std::endl;
+        //         std::cout<<" RawManAdd_GR_Bits   : "<<std::hex<<RawManAdd_GR_Bits<<std::endl;
+        //     #endif
+        // } else {
+        //     if(is_Add == 1 || is_both_sub) GRS_bits = RawManAdd & 0x7;
+        //     else                           GRS_bits = lshifted_RawManAdd & 0x7;
+        // }
 
-        uint16_t NormMan = (((PostNormMan >> 11) == 1) ?  PostNormMan >> 1 : PostNormMan) & M_MASK;
-        uint16_t NormExp = (uint16_t)(RawExp + is_msb_13 + ((PostNormMan >> 11) == 1)) + (uint16_t)(is_both_sub & ((PostNormMan >> 10) == 1));
+        // uint16_t RoundUp = (GRS_bits == 3 || GRS_bits == 6 || GRS_bits == 7) ? 1 : 0;
+        // uint16_t PostNormMan = (is_msb_13 == 1)                ? (uint16_t)(RawManAdd >> 3) + RoundUp :
+        //                        (is_Add == 1 || is_both_sub)    ? (uint16_t)(RawManAdd >> 2) + RoundUp :
+        //                                                          (uint16_t)(lshifted_RawManAdd >> 2) + RoundUp;    
+
+        // Subnormal Case
+        // RawExp > lshift --> RawExp --> 0
+        // RawExp == 0 && lzd == A -> RawEXp --> 1
+        uint16_t NormExp = (not_shift == 1) ? (RawExp == 0 ? 1 : RawExp) : (rshift > 0) ? (RawExp + rshift + rshifted_exp_up) : (RawExp > lshift) ? (RawExp - lshift) : 0;
+        uint16_t NormMan = shifted_RawManAdd & M_MASK;
+
+        // uint16_t NormMan = (((PostNormMan >> 11) == 1) ?  PostNormMan >> 1 : PostNormMan) & M_MASK;
+        // uint16_t NormExp = (uint16_t)(RawExp + is_msb_13 + ((PostNormMan >> 11) == 1)) + (uint16_t)(is_both_sub & ((PostNormMan >> 10) == 1)) - (is_Add ? 0 : lshit);
         uint16_t CalOut = SignOut << (E_WIDTH + M_WIDTH) | NormExp << M_WIDTH | NormMan;
 
         #ifdef PRINT_DEBUG
             std::cout<<" Post Normalization"<<std::endl;
         
-            std::cout<<" lzd                : "<<std::hex<<lzd<<std::endl;   
-            std::cout<<" rshit              : "<<std::hex<<rshit<<std::endl;   
-            std::cout<<" rshifted_RawManAdd : "<<std::hex<<rshifted_RawManAdd<<std::endl;   
-            std::cout<<" is_msb_13          : "<<std::hex<<is_msb_13<<std::endl;
-            std::cout<<" GRS_bits           : "<<std::hex<<GRS_bits<<std::endl;
-            std::cout<<" RoundUp            : "<<std::hex<<RoundUp<<std::endl;
-            std::cout<<" PostNormMan        : "<<std::hex<<PostNormMan<<std::endl;
+            std::cout<<" lzd                : "<<std::hex<<lzd<<std::endl;               
+            std::cout<<" not_shift          : "<<std::hex<<not_shift<<std::endl;   
+            std::cout<<" rshift             : "<<std::hex<<rshift<<std::endl;   
+            std::cout<<" lshift             : "<<std::hex<<lshift<<std::endl;   
+            std::cout<<" rshifted_RawMan    : "<<std::hex<<rshifted_RawMan<<std::endl;   
+            std::cout<<" lshifted_RawMan    : "<<std::hex<<lshifted_RawMan<<std::endl;   
+            std::cout<<" shifted_RawManAdd  : "<<std::hex<<shifted_RawManAdd<<std::endl;   
             std::cout<<" NormMan            : "<<std::hex<<NormMan<<std::endl;
             std::cout<<" NormExp            : "<<std::hex<<NormExp<<std::endl;
             std::cout<<" CalOut             : "<<std::hex<<CalOut<<std::endl;
         #endif
-        // if(is_Add != 1) exit(1);
-        if(PostNormMan == 0) return FP16(uint16_t(pzero));
+        if(RawManAdd == 0)                        return FP16(uint16_t(pzero));
         else if(NormExp == E_MAX && SignOut == 0) return FP16(uint16_t(pInf));
         else if(NormExp == E_MAX && SignOut == 1) return FP16(uint16_t(nInf));
         else return FP16(uint16_t(CalOut));
