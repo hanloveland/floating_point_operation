@@ -4,6 +4,7 @@
 // #define PRINT_DEBUG 1
 #include <stdint.h> 
 #include <cstdio>
+// #include <stdio.h>
 // #include "svdpi.h"
 
 #define K_WIDTH 16
@@ -151,6 +152,11 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     uint16_t fp16_b_em = (fp16_b_subnor == 1) ? fp16_b_m : ((0x1 << M_WIDTH) | fp16_b_m);
 
     #ifdef PRINT_DEBUG
+    printf("=====================================================\n");
+    printf("=====================================================\n");
+    #endif
+
+    #ifdef PRINT_DEBUG
     printf(" FP16 Addition (A+B)\n");
     printf(" Input A: 0x%04X\n",fp16_a);
     printf("  - Sign               : %x\n",fp16_a_s);
@@ -241,7 +247,7 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
 
     uint16_t rshifted_RawMan;
     if(rshift > 0) {
-        // maximun rshift is 4 when lzd is 15
+        // maximun rshift is 5 when lzd is 15 -> 10
         uint16_t rshifted_rbit = (uint16_t)((RawManAdd >> (rshift-1)) & 0x1);
         uint16_t rshifted_sbits = (rshift >= 2) ? (uint16_t)(RawManAdd & (uint16_t)((0x1<<(rshift-0x1))-0x1)) : 0;
         uint16_t rshifted_sbit = 0;
@@ -290,25 +296,31 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
         printf("  - NormExp            : %x\n",NormExp);
         printf("  - CalOut             : %x\n",CalOut);
     #endif
+
+    #ifdef PRINT_DEBUG
+    printf("=====================================================\n");
+    printf("=====================================================\n");
+    #endif
+
     if(fp16_a_nan == 1 || fp16_b_nan == 1) 
-        return uint16_t(qNaN);
+        return (uint16_t)(qNaN);
     else if((fp16_a_inf == 1 && fp16_b_inf == 1) && (fp16_a_s != fp16_b_s)) 
-        return uint16_t(sNaN);
+        return (uint16_t)(sNaN);
     else if((fp16_a_inf == 1 && fp16_a_s == 0) || (fp16_b_inf == 1 && fp16_b_s == 0)) 
-        return uint16_t(pInf);
+        return (uint16_t)(pInf);
     else if((fp16_a_inf == 1 && fp16_a_s == 1) || (fp16_b_inf == 1 && fp16_b_s == 1)) 
-        return uint16_t(nInf);
+        return (uint16_t)(nInf);
     else if(RawManAdd == 0) 
-        return uint16_t(pzero);
+        return (uint16_t)(pzero);
     else if(NormExp == E_MAX && SignOut == 0) 
-        return uint16_t(pInf);
+        return (uint16_t)(pInf);
     else if(NormExp == E_MAX && SignOut == 1) 
-        return uint16_t(nInf);
+        return (uint16_t)(nInf);
     else if(fp16_a_zero == 1 || fp16_b_zero == 1) {
         if(fp16_a_zero == 1) return fp16_b;
         else                 return fp16_a;
     } 
-    else return uint16_t(CalOut);
+    else return (uint16_t)(CalOut);
     
 }
 
@@ -316,7 +328,7 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
 // DPI_DLLESPEC
 // int fp16_add_int(int int_a, int int_b) {
 //     uint16_t fp16_a = int_a & 0xFFFF;
-//     uint16_t fp16_b = int_a & 0xFFFF;
+//     uint16_t fp16_b = int_b & 0xFFFF;
 //     uint16_t fp16_c = fp16_add(fp16_a,fp16_b);
 //     return (int)fp16_c;
 // }
