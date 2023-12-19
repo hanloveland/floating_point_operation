@@ -87,16 +87,13 @@ FP16 FP16::operator+(const FP16& other) const {
 
         // Align Big/Little Mantissa 
         uint16_t Shifted_BigMan = (uint16_t)(BigMan << LShift);
-        uint16_t Shifted_LitMan = (uint16_t)(LitMan >> RShift);
-        uint16_t Gaurd_Bit = (uint16_t)((uint16_t)(LitMan >> RShift) & 0x1);
-        uint16_t Round_Bit = (Exp_diff <= 3) ? 0   :
-                             (Exp_diff > 14) ? 0   : ((LitMan >> (Exp_diff-4)) & 0x1);                
-        uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift)) - 0x1));
+        uint16_t Shifted_LitMan = (uint16_t)(LitMan >> (RShift+2));
+        uint16_t Round_Bit = (Exp_diff <= 3) ? ((LitMan >> (1)) & 0x1)   :
+                             (Exp_diff > 14) ? 0                         : ((LitMan >> (RShift+1)) & 0x1);                
+        uint16_t Sticky_Bits = (RShift == 0) ? (LitMan & 0x1) : (LitMan & ((0x1 << (RShift+1)) - 0x1));
         uint16_t Sticky_Bit = 0;
         for(uint16_t i=0;i<16;i++) if((Sticky_Bits>>i) & 0x1 == 1) Sticky_Bit = 1;
-        uint16_t LitMan_GRS = (uint16_t)(Gaurd_Bit << 2) + (uint16_t)(Round_Bit << 1) +  Sticky_Bit;
-        uint16_t LitMan_RoundUp = (LitMan_GRS == 3 || LitMan_GRS == 6 || LitMan_GRS == 7) ? 1 : 0;
-        Shifted_LitMan = Shifted_LitMan + LitMan_RoundUp;
+        Shifted_LitMan = (uint16_t)(Shifted_LitMan << 2) + (uint16_t)(Round_Bit << 1) + (uint16_t)(Sticky_Bit);
         #ifdef PRINT_DEBUG
             std::cout<<" Compare Exponents and Align Mantissa"<<std::endl;
             std::cout<<" is_both_sub     : "<<std::hex<<is_both_sub<<std::endl;
@@ -107,10 +104,8 @@ FP16 FP16::operator+(const FP16& other) const {
             std::cout<<" LShift          : "<<std::hex<<LShift<<std::endl;      
             std::cout<<" RShift          : "<<std::hex<<RShift<<std::endl;      
             std::cout<<" Shifted_LitMan  : "<<std::hex<<Shifted_LitMan<<std::endl;                                                 
-            std::cout<<" Gaurd_Bit       : "<<std::hex<<Gaurd_Bit<<std::endl;              
             std::cout<<" Round_Bit       : "<<std::hex<<Round_Bit<<std::endl;  
             std::cout<<" Sticky_Bit      : "<<std::hex<<Sticky_Bit<<std::endl; 
-            std::cout<<" LitMan_GRS      : "<<std::hex<<LitMan_GRS<<std::endl;              
             std::cout<<" LitMan_RoundUp  : "<<std::hex<<LitMan_RoundUp<<std::endl; 
             std::cout<<" Shifted_BigMan  : "<<std::hex<<Shifted_BigMan<<std::endl;  
             std::cout<<" Shifted_LitMan  : "<<std::hex<<Shifted_LitMan<<std::endl;              

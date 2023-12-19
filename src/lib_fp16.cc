@@ -195,18 +195,14 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     
     // Align Big/Little Mantissa 
     uint16_t Shifted_BigMan = (uint16_t)(BigMan << LShift);
-    uint16_t Shifted_LitMan = (uint16_t)(LitMan >> RShift);    
+    uint16_t Shifted_LitMan = (uint16_t)(LitMan >> (RShift+2));    
 
-    uint16_t Gaurd_Bit = (uint16_t)((uint16_t)(LitMan >> RShift) & 0x1);
-    uint16_t Round_Bit = (Exp_diff <= 3) ? 0   :
-                            (Exp_diff > 14) ? 0   : ((LitMan >> (Exp_diff-4)) & 0x1);                
-    uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift)) - 0x1));
+    uint16_t Round_Bit = (Exp_diff <= 3) ? ((LitMan >> (1)) & 0x1) :
+                         (Exp_diff > 14) ? 0   : ((LitMan >> (RShift+1)) & 0x1);                
+    uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift+1)) - 0x1));
     uint16_t Sticky_Bit = 0;
     for(uint16_t i=0;i<16;i++) if((Sticky_Bits>>i) & 0x1 == 1) Sticky_Bit = 1;
-    uint16_t LitMan_GRS = (uint16_t)(Gaurd_Bit << 2) + (uint16_t)(Round_Bit << 1) +  Sticky_Bit;
-    uint16_t LitMan_RoundUp = (LitMan_GRS == 3 || LitMan_GRS == 6 || LitMan_GRS == 7) ? 1 : 0;
-    Shifted_LitMan = Shifted_LitMan + LitMan_RoundUp;
-
+    Shifted_LitMan = (uint16_t)(Shifted_LitMan << 2) + (uint16_t)(Round_Bit << 1) + (uint16_t)(Sticky_Bit);
     #ifdef PRINT_DEBUG
     printf(" Compare Exponents and Align Mantissa\n");
     printf("  - is_both_sub     : %x\n",is_both_subnormal);
@@ -218,7 +214,7 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     printf("  - Shifted_LitMan  : %x\n",Shifted_LitMan);                                                 
     printf("  - Round_Bit       : %x\n",Round_Bit);  
     printf("  - Sticky_Bit      : %x\n",Sticky_Bit);
-    printf("  - LitMan_GRS      : %x\n",LitMan_GRS);
+    // printf("  - LitMan_GRS      : %x\n",LitMan_GRS);
     
     #endif
 
