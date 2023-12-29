@@ -14,8 +14,8 @@ int main() {
     std::uniform_real_distribution<> dist2(-1,1);
 
         #if 0
-        float fp32_a = 0.0009760441607795656;//dist1(e2);
-        float fp32_b = -2.141988625226077e-05;//dist2(e2);
+        float fp32_a = dist1(e2);
+        float fp32_b = dist2(e2);
         float fp32_c = fp32_a * fp32_b;
 
         FP16g fp16g_a(fp16(0));
@@ -53,9 +53,14 @@ int main() {
         std::cout<<"  - B   :"<<fp16_b.value.fval<<" / 0x"<<std::hex<<fp16_b.value.ival<<std::endl;
         std::cout<<"  - A*B :"<<fp16_c.value.fval<<" / 0x"<<std::hex<<fp16_c.value.ival<<std::endl;
 
+        std::cout<<" FP16 Cal (Library) "<<std::endl;
+        uint16_t lib_fp16_c = fp16_mul(fp16_a.value.ival,fp16_b.value.ival);  
+        std::cout<<"  - A*B :0x"<<std::hex<<lib_fp16_c<<std::endl;
         std::cout<<"Fail!"<<std::endl;
         std::cout<<"Diff "<<diff<<std::endl;
         std::cout<<"Dif Ratio "<<diff_ratio<<std::endl;       
+        
+
         return 0;      
         #endif
 
@@ -77,7 +82,7 @@ int main() {
      -> Subnormal + Subnormal 
 */
     #if 1
-    uint64_t iter = 10000000000;
+    uint64_t iter = 100000000;
     uint32_t op = 2;// 0: add, 1:sub, 2: mul
     std::cout<<" Iteration : "<<iter<<std::endl;
     std::cout<<" Operator  : "<<op<<std::endl;
@@ -203,8 +208,12 @@ int main() {
         uint16_t diff_int = (golden_c.ival > fp16_c.value.ival) ? golden_c.ival - fp16_c.value.ival : fp16_c.value.ival - golden_c.ival;
         if(diff_int > 1) is_fail = true;   
         
-        uint16_t lib_fp16_c = fp16_add(fp16_a.value.ival,fp16_b.value.ival);        
-        // if(lib_fp16_c != fp16_c.value.ival) is_fail = true;
+        uint16_t lib_fp16_c = 0;
+        if(op == 0)         lib_fp16_c = fp16_add(fp16_a.value.ival,fp16_b.value.ival);        
+        else if(op == 1)    lib_fp16_c = fp16_add(fp16_a.value.ival,fp16_b.value.ival);        
+        else if(op == 2)    lib_fp16_c = fp16_mul(fp16_a.value.ival,fp16_b.value.ival);             
+
+        if(lib_fp16_c != fp16_c.value.ival) is_fail = true;
 
         if(is_fail) {
             std::cout<<" FP32 "<<std::endl;

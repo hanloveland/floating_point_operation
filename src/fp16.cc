@@ -235,7 +235,8 @@ FP16 FP16::operator*(const FP16& other) const {
         // Expont and Mantissa Calculation
         uint16_t src_a_exp = (is_subnor())       ? 1 : get_expo();
         uint16_t src_b_exp = (other.is_subnor()) ? 1 : other.get_expo();
-        uint16_t RawExp    = src_a_exp + src_b_exp + ~(15) + 1; // Exponent Calculation
+        // Exponent Calculation
+        uint16_t RawExp    = src_a_exp + src_b_exp + ~(15) + 1; 
         uint32_t RawMan    = (is_zero() || other.is_zero()) ? 0
                                                             : get_emani() * other.get_emani();   // Mantissa Calculation
         uint16_t SignOut   = (get_sign() == other.get_sign()) ? 0 : 1;
@@ -251,16 +252,18 @@ FP16 FP16::operator*(const FP16& other) const {
                         |
                         lzd
             2211111111110000000000
-            1098765432109876543210
-            Case1 (lzd == 21) & (31 >= RawExp >= 2)
+            1098765432109876543210    
+            Case1: Nomral Result (lzd == 21)
             1xxxxxxxxxxxxxxxxxxxxx >> Right Shift by one 
             01xxxxxxxxxxxxxxxxxxxx
-            Case2 (lzd == 20) & (30 >= RawExp >= 1)
+            Case2: Normal Result (lzd == 20)
             01xxxxxxxxxxxxxxxxxxxx not shift
-            Case3 (20 > lzd > 10) & (30 >= RawExp-LSh >= 1)
-            0001xxxxxxxxxxxxxxxxxx << left shift by LSh (20-lzd)
-            Case4 
-            001xxxxxxxxxxxxxxxxxxx >> Right Shift by RSh (1+RawExp)
+            Case3: Normal Result (20 > lzd)
+            0001xxxxxxxxxxxxxxxxxx << left shift by (20-lzd)
+            Case4: Subnormal (RawExp < 1)
+            001xxxxxxxxxxxxxxxxxxx >> Right Shift by |RawExp-1|
+            Case5: Subnormal (RawExp > 1)
+            001xxxxxxxxxxxxxxxxxxx << Reft Shift by |RawExp-1|            
         */
         #ifdef PRINT_DEBUG
             std::cout<<" Calculation Exponents and Mantissa"<<std::endl;
@@ -277,11 +280,14 @@ FP16 FP16::operator*(const FP16& other) const {
         uint32_t NormalMan  = 0;
         uint16_t SubNormalExp  = 0;
         uint32_t SubNormalMan  = 0;        
-        // Carry-Out Right Shifted Mantissa
+        // Right Shifted Mantissa due to Carry-Out bit
+        // case1: lzd == 21 
         uint16_t CARShiftedRawNormExp = RawExp + 1;
         uint32_t CARShiftedRawNormMan = RawMan; 
 
-        // RawExp >= 1
+        // case2/case3: lzd < 21
+        // left shift by one
+        // Use same normlization path with case which it's lzd is 21
         uint16_t NormLSh            = 20 - lzd;
         uint16_t LShiftedRawNormExp = RawExp - NormLSh;
         uint32_t LShiftedRawNormMan = (uint32_t)(RawMan << NormLSh) << 1;
@@ -295,31 +301,31 @@ FP16 FP16::operator*(const FP16& other) const {
         }
 
         // Rounding for Normal Result
-        uint16_t NormalMan_GBit = (uint16_t)((NormalMan >> (11)) & 0x1);
-        uint16_t NormalMan_RBit = (uint16_t)((NormalMan >> (10)) & 0x1);
-        uint16_t NormalMan_SBits = (NormalMan & 0x3ff);
-        uint16_t NormalMan_SBit = (NormalMan_SBits == 0) ? 0 : 1;
-        uint16_t NormalMan_GRSBit = (uint16_t)(NormalMan_GBit << 2) + (uint16_t)(NormalMan_RBit << 1) + (uint16_t)NormalMan_SBit;
+        uint16_t NormalMan_GBit    = (uint16_t)((NormalMan >> (11)) & 0x1);
+        uint16_t NormalMan_RBit    = (uint16_t)((NormalMan >> (10)) & 0x1);
+        uint16_t NormalMan_SBits   = (NormalMan & 0x3ff);
+        uint16_t NormalMan_SBit    = (NormalMan_SBits == 0) ? 0 : 1;
+        uint16_t NormalMan_GRSBit  = (uint16_t)(NormalMan_GBit << 2) + (uint16_t)(NormalMan_RBit << 1) + (uint16_t)NormalMan_SBit;
         uint16_t NormalMan_RoundUp = (NormalMan_GRSBit == 3 || NormalMan_GRSBit == 6 || NormalMan_GRSBit == 7) ? 1 : 0;
-        NormalMan = (uint16_t)((NormalMan >>11) & 0x7ff) + NormalMan_RoundUp;         
+        NormalMan                  = (uint16_t)((NormalMan >>11) & 0x7ff) + NormalMan_RoundUp;         
         if((uint16_t)((NormalMan >>11) & 0x1) == 0x1) {
             NormalExp = NormalExp + 1;
             NormalMan = NormalMan >> 1;
         }
-        // RawExp < 1 (Subnormal)
-        uint16_t MaxRSh    = (lzd >= 10) ? lzd - 10 : 0;
-        uint16_t MaxLSh    = (lzd < 20)  ? 19 - lzd : 0;
-        uint16_t isSubNorLSh = (RawExp >= 1 && RawExp <= 45) ? 1 : 0;
-        uint16_t SubNorRSh = (isSubNorLSh == 0) ? 1 + ~RawExp + 1 : 0;
-        uint16_t SubNorLSh = (isSubNorLSh == 1) ? RawExp - 1      : 0;
+        // Case4/5: Subnormal 
+        uint16_t MaxRSh                = (lzd >= 10)                   ? (lzd - 10)        : (0);
+        uint16_t MaxLSh                = (lzd < 20)                    ? (19 - lzd)        : (0);
+        uint16_t isSubNorLSh           = (RawExp >= 1 && RawExp <= 45) ? (1)               : (0);
+        uint16_t SubNorRSh             = (isSubNorLSh == 0)            ? (1 + ~RawExp + 1) : (0);
+        uint16_t SubNorLSh             = (isSubNorLSh == 1)            ? (RawExp - 1     ) : (0);
         uint16_t RShiftedRawSubNormExp = 0;
         uint16_t RShiftedRawSubNormMan = (uint16_t)(((RawMan >> SubNorRSh)>>10) & 0x7ff);
         uint16_t LShiftedRawSubNormExp = 0;
         uint16_t LShiftedRawSubNormMan = (uint16_t)(((RawMan << SubNorLSh)>>10) & 0x7ff);
 
         uint32_t SubNorManTmp = (isSubNorLSh == 1) ? (RawMan << SubNorLSh) : (RawMan >> SubNorRSh);
-        SubNormalMan = (isSubNorLSh == 1) ? LShiftedRawSubNormMan : RShiftedRawSubNormMan;
-        SubNormalExp = (isSubNorLSh == 1) ? LShiftedRawSubNormExp : RShiftedRawSubNormExp;
+        SubNormalMan          = (isSubNorLSh == 1) ? LShiftedRawSubNormMan : RShiftedRawSubNormMan;
+        SubNormalExp          = (isSubNorLSh == 1) ? LShiftedRawSubNormExp : RShiftedRawSubNormExp;
 
         uint16_t SubNorMan_Gbit   = (uint16_t)((SubNorManTmp >> (10)) & 0x1);
         uint16_t SubNorMan_Rbit   = (uint16_t)((SubNorManTmp >> (9)) & 0x1);
@@ -327,8 +333,8 @@ FP16 FP16::operator*(const FP16& other) const {
         uint16_t SubNorMan_Sbit   = (SubNorMan_Sbits == 0) ? 0 : 1;
         uint16_t SubNorMan_GRSBit = (uint16_t)(SubNorMan_Gbit << 2) + (uint16_t)(SubNorMan_Rbit << 1) + (uint16_t)SubNorMan_Sbit;
 
-        uint16_t SubNorMan_RoundUp = (SubNorMan_GRSBit == 3 || SubNorMan_GRSBit == 6 || SubNorMan_GRSBit == 7) ? 1 : 0;
-        SubNormalMan = SubNormalMan + SubNorMan_RoundUp;
+        uint16_t SubNorMan_RoundUp = (SubNorMan_GRSBit == 3 || SubNorMan_GRSBit == 6 || SubNorMan_GRSBit == 7) ? (1) : (0);
+        SubNormalMan               = SubNormalMan + SubNorMan_RoundUp;
         if(SubNormalMan >> 10 & 0x1 == 1) {
             SubNormalExp = 1;
             SubNormalMan = SubNormalMan >> 1;     
@@ -337,38 +343,37 @@ FP16 FP16::operator*(const FP16& other) const {
             SubNormalMan = SubNormalMan;       
         }
 
-
         if(NormalExp>30 && NormalExp <= 50) {
             #ifdef PRINT_DEBUG
-                std::cout<<" Overflow"<<std::endl;
+                std::cout<<" Result: Overflow"<<std::endl;
             #endif               
             RawNormExp = E_MAX;
             RawNormMan = 0;            
         } else if(NormalExp >= 1 && NormalExp <= 30) {
             #ifdef PRINT_DEBUG
-                std::cout<<" Normal"<<std::endl;
+                std::cout<<" Result: Normal"<<std::endl;
             #endif                           
             RawNormExp = NormalExp;
             RawNormMan = NormalMan;
         } else if((MaxRSh >= SubNorRSh) || (MaxLSh >= SubNorLSh)) {
             #ifdef PRINT_DEBUG
-                std::cout<<" Subnormal"<<std::endl;
+                std::cout<<" Result: Subnormal"<<std::endl;
             #endif                                       
             RawNormExp = SubNormalExp;
             RawNormMan = SubNormalMan;                 
         } else {
             #ifdef PRINT_DEBUG
-                std::cout<<" Underflow"<<std::endl;
+                std::cout<<" Result: Underflow"<<std::endl;
             #endif                                       
                 RawNormExp = 0;
                 RawNormMan = 0;               
         }
 
         #ifdef PRINT_DEBUG
-            std::cout<<" lzd == 21 "<<std::endl;
+            std::cout<<" Normal Case (lzd == 21) "<<std::endl;
             std::cout<<" CARShiftedRawNormExp  : "<<std::hex<<CARShiftedRawNormExp<<std::endl;
             std::cout<<" CARShiftedRawNormMan  : "<<std::hex<<CARShiftedRawNormMan<<std::endl;             
-            std::cout<<" lzd < 21 "<<std::endl;
+            std::cout<<" Normal Case (lzd < 21) "<<std::endl;
             std::cout<<" NormLSh               : "<<std::hex<<NormLSh<<std::endl;                 
             std::cout<<" LShiftedRawNormExp    : "<<std::hex<<LShiftedRawNormExp<<std::endl;
             std::cout<<" LShiftedRawNormMan    : "<<std::hex<<LShiftedRawNormMan<<std::endl;     
@@ -392,12 +397,10 @@ FP16 FP16::operator*(const FP16& other) const {
 
         uint16_t NormExp    = RawNormExp & E_MASK;
         uint16_t NormMan    = RawNormMan & M_MASK;
-
-        uint16_t CalOut = SignOut << (E_WIDTH + M_WIDTH) | NormExp << M_WIDTH | NormMan;
+        uint16_t CalOut     = SignOut << (E_WIDTH + M_WIDTH) | NormExp << M_WIDTH | NormMan;
 
         #ifdef PRINT_DEBUG
-            std::cout<<" Post Normalization"<<std::endl;
-        
+            std::cout<<" Post Normalization"<<std::endl;        
             std::cout<<" NormMan            : "<<std::hex<<NormMan<<std::endl;
             std::cout<<" NormExp            : "<<std::hex<<NormExp<<std::endl;
             std::cout<<" CalOut             : "<<std::hex<<CalOut<<std::endl;
