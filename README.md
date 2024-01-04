@@ -11,7 +11,7 @@ C-based bit-level FP16/FP32 operator for designing and verifying a 16bits/32bits
 2. FP32 Subtraction
 3. FP32 Multiplication
 4. FP32 division (occur bit error at last bit of mantisa due to round-up)
-5. FP16 Addition (support normal and subnormal) 
+5. FP16 Addition/Subtraction (support normal and subnormal) 
+6. FP16 Multiplication (support normal and subnormal) 
 TODO list
-1. add more test cases (INF, NaN, etc.)
-2. add FP16 operator (Subtraction, Multiplication, Division)
+1. add FP16 operator (Division)
