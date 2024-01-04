@@ -1,7 +1,7 @@
 #include "fp16.h"
 #include <iostream>
 
-// #define PRINT_DEBUG 1
+#define PRINT_DEBUG 1
 #define K_WIDTH 16
 #define E_WIDTH 5
 #define M_WIDTH 10
@@ -46,6 +46,10 @@ FP16 FP16::operator+(const FP16& other) const {
     } else if(is_inf() || other.is_inf()) { // Infinity Arthmetic
         if((is_inf() && get_sign() == 0) || (other.is_inf() && other.get_sign() == 0)) return FP16(uint16_t(pInf));  
         else                                                                           return FP16(uint16_t(nInf));  
+    } else if(is_zero() && other.is_zero()) { // both Operands are zero, return zero
+        std::cout<<"both zero"<<std::endl;
+        if(get_sign() == 1 && other.get_sign() == 1) return FP16(uint16_t(nzero));
+        else                                         return FP16(uint16_t(pzero));
     } else if(is_zero() || other.is_zero()) { // One of Operands is zero, return the other value
         if(is_zero())   return other;
         else            return FP16(value);
@@ -190,7 +194,10 @@ FP16 FP16::operator+(const FP16& other) const {
             std::cout<<" NormExp            : "<<std::hex<<NormExp<<std::endl;
             std::cout<<" CalOut             : "<<std::hex<<CalOut<<std::endl;
         #endif
-        if(RawManAdd == 0)                        return FP16(uint16_t(pzero));
+        if(RawManAdd == 0) {
+            if(SignOut == 0) return FP16(uint16_t(pzero));
+            else             return FP16(uint16_t(nzero));
+        }
         else if(NormExp == E_MAX && SignOut == 0) return FP16(uint16_t(pInf));
         else if(NormExp == E_MAX && SignOut == 1) return FP16(uint16_t(nInf));
         else return FP16(uint16_t(CalOut));
@@ -337,10 +344,8 @@ FP16 FP16::operator*(const FP16& other) const {
         SubNormalMan               = SubNormalMan + SubNorMan_RoundUp;
         if(SubNormalMan >> 10 & 0x1 == 1) {
             SubNormalExp = 1;
-            SubNormalMan = SubNormalMan >> 1;     
         } else {
             SubNormalExp = 0;
-            SubNormalMan = SubNormalMan;       
         }
 
         if(NormalExp>30 && NormalExp <= 50) {

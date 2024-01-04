@@ -1,7 +1,7 @@
 #ifndef LIB_FP16_H
 #define LIB_FP16_H
 
-// #define PRINT_DEBUG 1
+#define PRINT_DEBUG 1
 #include <stdint.h> 
 #include <cstdio>
 // #define DPI 1
@@ -200,9 +200,10 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     uint16_t Shifted_LitMan = (uint16_t)(LitMan >> (RShift+2));    
 
     uint16_t Round_Bit = (Exp_diff <= 3) ? ((LitMan >> (1)) & 0x1) :
-                         (Exp_diff > 14) ? 0   : ((LitMan >> (RShift+1)) & 0x1);                
-    uint16_t Sticky_Bits = (LitMan & ((0x1 << (RShift+1)) - 0x1));
+                         (Exp_diff > 14) ? 0                       : ((LitMan >> (RShift+1)) & 0x1);                
+    uint16_t Sticky_Bits = (uint16_t)(LitMan & (uint16_t)((0x1 << (RShift+1)) - 0x1));
     uint16_t Sticky_Bit = 0;
+    uint16_t Sticky_mask = (uint16_t)((0x1 << (RShift)) - 0x1);
     for(uint16_t i=0;i<16;i++) if((Sticky_Bits>>i) & 0x1 == 1) Sticky_Bit = 1;
     Shifted_LitMan = (uint16_t)(Shifted_LitMan << 2) + (uint16_t)(Round_Bit << 1) + (uint16_t)(Sticky_Bit);
     #ifdef PRINT_DEBUG
@@ -211,13 +212,15 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     printf("  - RawExp          : %x\n",RawExp);
     printf("  - BigMan          : %x\n",BigMan);                                                 
     printf("  - LitMan          : %x\n",LitMan);                                                 
-    printf("  - Exp_diff        : %x\n",Exp_diff);                                                 
+    printf("  - Exp_diff        : %x\n",Exp_diff);      
+    printf("  - LShift          : %x\n",LShift);                                                     
+    printf("  - RShift          : %x\n",RShift);                                               
     printf("  - Shifted_BigMan  : %x\n",Shifted_BigMan);                                                     
-    printf("  - Shifted_LitMan  : %x\n",Shifted_LitMan);                                                 
-    printf("  - Round_Bit       : %x\n",Round_Bit);  
+    printf("  - Shifted_LitMan  : %x\n",Shifted_LitMan);
+    printf("  - Round_Bit       : %x\n",Round_Bit);
+    printf("  - Sticky_Bits     : %x\n",Sticky_Bits);  
+    printf("  - Sticky_MASK     : %x\n",Sticky_mask);
     printf("  - Sticky_Bit      : %x\n",Sticky_Bit);
-    // printf("  - LitMan_GRS      : %x\n",LitMan_GRS);
-    
     #endif
 
     uint16_t RawManAdd;
@@ -308,7 +311,8 @@ uint16_t fp16_add(uint16_t fp16_a, uint16_t fp16_b) {
     else if((fp16_a_inf == 1 && fp16_a_s == 1) || (fp16_b_inf == 1 && fp16_b_s == 1)) 
         return (uint16_t)(nInf);
     else if(RawManAdd == 0) 
-        return (uint16_t)(pzero);
+        if(SignOut == 0) return (uint16_t)(pzero);
+        else             return (uint16_t)(nzero);
     else if(NormExp == E_MAX && SignOut == 0) 
         return (uint16_t)(pInf);
     else if(NormExp == E_MAX && SignOut == 1) 
@@ -459,7 +463,8 @@ uint16_t fp16_mul(uint16_t fp16_a, uint16_t fp16_b) {
 
     if(SubNormalManRU >> 10 & 0x1 == 1) {
         SubNormalExp = 1;
-        SubNormalMan = SubNormalManRU >> 1;     
+        // SubNormalMan = SubNormalManRU >> 1;     
+        SubNormalMan = SubNormalManRU;       
     } else {
         SubNormalExp = 0;
         SubNormalMan = SubNormalManRU;       
@@ -553,11 +558,19 @@ int fp16_add_int(int int_a, int int_b) {
 }
 
 DPI_DLLESPEC
+int fp16_mul_int(int int_a, int int_b) {
+    uint16_t fp16_a = int_a & 0xFFFF;
+    uint16_t fp16_b = int_b & 0xFFFF;
+    uint16_t fp16_c = fp16_mul(fp16_a,fp16_b);
+    return (int)fp16_c;
+}
+
+DPI_DLLESPEC
 int FP32_to_FP16(float fp32_value){
     union fp32f tmp = {fp32_value};
     uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
     return (int)uint16_value;
-};
+}
 
 DPI_DLLESPEC
 float FP16_to_FP32(int fp16_value){
@@ -566,7 +579,7 @@ float FP16_to_FP32(int fp16_value){
     union fp32i union_tmp = {fp32_int};
     // uint16_t uint16_value = numpy_floatbits_to_halfbits(tmp.ival);
     return union_tmp.fval;
-};
+}
 #endif
 
 #endif
